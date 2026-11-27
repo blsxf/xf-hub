@@ -3,10 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="XF-HUB">
+<meta name="theme-color" content="#111110">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>XF-HUB</title>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795742088924;
+var XF_BUILD=1795748828347;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
@@ -150,8 +157,8 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 
   /* ---------- MODE GATE ---------- */
   .gate-wrap {
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    padding: 24px 16px; animation: fadeIn 0.25s var(--ease);
+    min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); animation: fadeIn 0.25s var(--ease);
   }
   .gate { width: 100%; max-width: 430px; text-align: center; }
   .brand-mark {
@@ -509,7 +516,8 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
   @keyframes fadeUp { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 
   @media (max-width: 720px) {
-    .shell { padding: 14px 12px 92px; }
+    .shell { padding: max(14px, env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom)); }
+    .search-input, .field, textarea.pad { font-size: 16px; }
     .launcher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
     .drive-strip { grid-template-columns: 1fr; gap: 9px; }
     .pin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -701,6 +709,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 </nav>
 
 <input type="file" id="folderInput" webkitdirectory directory multiple class="hidden">
+<input type="file" id="multiFileInput" multiple class="hidden">
 <input type="file" id="jsonInput" accept=".json" class="hidden">
 <input type="file" id="toolFileInput" accept=".html,.htm" class="hidden">
 
@@ -1068,10 +1077,11 @@ async function launchCachedTool(toolId) {
     if (r === "updated" || r === "current") return launchCachedTool(toolId);
     return;
   }
-  // Same-origin in-place launch (Tag Tool pattern: keeps localStorage intact & zero popup block on mobile!)
-  // Browser Refresh brings you right back to XF-HUB!
+  // Inject a tiny unobtrusive floating back pill so iPhone Home Screen PWA mode always has a 1-tap return to XF-HUB
+  const backBtn = '<button onclick="location.reload()" aria-label="Back to XF-HUB" style="position:fixed;left:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:2147483647;background:#161513;color:#f3efe6;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:7px 12px;font:600 12px/1 -apple-system,Segoe UI,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;opacity:.88">‹ XF</button>';
+  const out = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, backBtn + "</body>") : (html + backBtn);
   document.open();
-  document.write(html);
+  document.write(out);
   document.close();
 }
 
@@ -1136,6 +1146,10 @@ function getCleanSelfHtml() {
   const si = clone.querySelector("#searchInput"); if (si) si.value = "";
   const t = clone.querySelector("#toast"); if (t) t.classList.remove("show");
   return "<!DOCTYPE html>\n" + clone.outerHTML;
+}
+
+function downloadOfflineHtml() {
+  triggerDownload("XF-HUB.html", getCleanSelfHtml(), "text/html;charset=utf-8");
 }
 
 function downloadFullInstaller() {
@@ -1673,9 +1687,13 @@ function openSheet(kind) {
       </div>
       <div style="display:grid;gap:8px">
         <button class="btn pri" onclick="downloadFullInstaller()">Download Windows Setup (.cmd)</button>
-        <button class="btn" onclick="downloadScoutCmd()">Download Read-Only Scout (.cmd)</button>
-        <button class="btn" onclick="syncAllTools(true)">Check All Updates Now</button>
+        <button class="btn" onclick="downloadOfflineHtml()">Save Offline Single-File (.html)</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn" onclick="downloadScoutCmd()">Win Scout</button>
+          <button class="btn" onclick="syncAllTools(true)">Sync Now</button>
+        </div>
       </div>
+      ${(/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone) ? `<div class="list-box"><div class="kv-row"><span class="kv-k">iPhone Offline App</span><span class="kv-v">Share → Add to Home Screen</span></div></div>` : ""}
       <div class="sec-title">Live Sync &amp; Playtest Settings</div>
       <div style="display:grid;gap:8px">
         <input id="hubFeedIn" class="field" placeholder="Feed URL (default: blsxf/xf-hub, or 'off')" value="${esc(hubFeed)}">
@@ -1819,18 +1837,21 @@ document.addEventListener("keydown", e => {
 });
 
 // ---------- BROWSER / PHONE FOLDER SCOUT ----------
-function pickFolder() { document.getElementById("folderInput").click(); }
+function pickFolder() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  document.getElementById(isIOS ? "multiFileInput" : "folderInput").click();
+}
 function pickJson()   { document.getElementById("jsonInput").click(); }
 function exportJson() {
   const s = activeSnap(); if (!s) return showToast("No snapshot");
   triggerDownload(`${(s.deviceName || "device").replace(/[^a-z0-9_-]/gi, "_")}.json`, JSON.stringify(s, null, 2), "application/json");
 }
 
-document.getElementById("folderInput").addEventListener("change", (e) => {
+function handlePickedFiles(e) {
   const fileList = Array.from(e.target.files || []);
   if (!fileList.length) return;
   const firstRel = fileList[0].webkitRelativePath || fileList[0].name;
-  const rootName = firstRel.includes("/") ? firstRel.split("/")[0] : "Folder";
+  const rootName = firstRel.includes("/") ? firstRel.split("/")[0] : (/iPad|iPhone|iPod/.test(navigator.userAgent) ? "iPhone Files" : "Files");
   const bucket = (name) => {
     const ext = ("." + (name.split(".").pop() || "")).toLowerCase();
     if ([".pdf",".doc",".docx",".xls",".xlsx",".ppt",".pptx",".txt",".md",".csv",".epub"].includes(ext)) return "Documents";
@@ -1876,7 +1897,9 @@ document.getElementById("folderInput").addEventListener("change", (e) => {
   closeSheet();
   showToast(`Scanned ${parsed.length} files`);
   e.target.value = "";
-});
+}
+document.getElementById("folderInput").addEventListener("change", handlePickedFiles);
+document.getElementById("multiFileInput").addEventListener("change", handlePickedFiles);
 
 document.getElementById("jsonInput").addEventListener("change", async (e) => {
   const f = e.target.files[0]; if (!f) return;
@@ -1886,6 +1909,11 @@ document.getElementById("jsonInput").addEventListener("change", async (e) => {
   } catch { showToast("Invalid JSON"); }
   e.target.value = "";
 });
+
+// Register offline PWA Service Worker when hosted over HTTPS (iPhone/Android 1-tap offline app!)
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(() => {}); });
+}
 
 // Boot
 loadPins();
