@@ -13,7 +13,7 @@
 <title>XF-HUB</title>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795750685049;
+var XF_BUILD=1795782514905;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
@@ -672,7 +672,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
         </div>
         <div>
           <div class="gate-name">EPTools</div>
-          <div class="gate-hint">Express Pawn · Tag Tool &amp; more</div>
+          <div class="gate-hint">Express Pawn · Tag Tool · IMEI Tool</div>
         </div>
       </button>
     </div>
@@ -763,7 +763,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
       <div class="scout-bar">
         <div>
           <div style="font-weight:620;font-size:14px">Express Pawn Tools</div>
-          <div style="font-size:12px;color:var(--muted)">Tag Tool auto-syncs offline · More EP tools coming soon</div>
+          <div style="font-size:12px;color:var(--muted)">Tag Tool &amp; IMEI Tool auto-sync offline · More EP tools coming soon</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn pri sm" onclick="syncAllTools(true)">Sync EP Tools</button>
@@ -907,6 +907,7 @@ const LS_PINS  = "xf_hub_pins_v1";
 const LS_PAD   = "xf_hub_scratchpad_v1";
 const LS_THEME = "xf_hub_theme_v1";
 const LS_TOOLS = "xf_hub_tool_registry_v2";
+const LS_DISMISSED = "xf_hub_dismissed_tools_v1";
 const LS_GH_PAT = "xf_hub_gh_pat_v1";
 const LS_PLAYTEST = "xf_hub_playtest_v1";
 const LS_PT_EMAIL = "xf_hub_playtest_email_v1";
@@ -948,6 +949,19 @@ const DEFAULT_TOOLS = [
     ghRepo: "",
     ghPath: "",
     localPath: "C:\\Dev\\express-pawn"
+  },
+  {
+    id: "imeitool",
+    name: "IMEI Tool",
+    suite: "ep",
+    scope: "Express Pawn",
+    color: "ico-amber",
+    icon: "phone",
+    sourceType: "feed",
+    feedBase: "https://raw.githubusercontent.com/blsxf/express-pawn-tools/main/imei/",
+    ghRepo: "",
+    ghPath: "",
+    localPath: "C:\\Dev\\express-pawn-tools\\imei"
   },
   {
     id: "charbuilder",
@@ -996,7 +1010,7 @@ function inferToolSuite(t) {
   const id = (t && t.id || "").toLowerCase();
   const scope = (t && t.scope || "").toLowerCase();
   const feed = (t && t.feedBase || "").toLowerCase();
-  if (id === "tagtool" || scope === "work" || scope.includes("express pawn") || feed.includes("express-pawn")) return "ep";
+  if (id === "tagtool" || id === "imeitool" || scope === "work" || scope.includes("express pawn") || feed.includes("express-pawn")) return "ep";
   return "xf";
 }
 function suiteLabel(suite) { return suite === "ep" ? "EPTools" : "XFTools"; }
@@ -1109,10 +1123,21 @@ function triggerDownload(filename, content, mime) {
 // ---------- LIVE TOOL SYNC ENGINE ----------
 function loadTools() {
   let migrated = false;
+  let dismissed = [];
+  try {
+    const dRaw = JSON.parse(localStorage.getItem(LS_DISMISSED) || "[]");
+    if (Array.isArray(dRaw)) dismissed = dRaw;
+  } catch {}
   try {
     const raw = JSON.parse(localStorage.getItem(LS_TOOLS) || "null");
     tools = Array.isArray(raw) && raw.length ? raw : DEFAULT_TOOLS.map(x => Object.assign({}, x));
   } catch { tools = DEFAULT_TOOLS.map(x => Object.assign({}, x)); }
+  DEFAULT_TOOLS.forEach(def => {
+    if (!dismissed.includes(def.id) && !tools.some(t => t.id === def.id)) {
+      tools.push(Object.assign({}, def));
+      migrated = true;
+    }
+  });
   const defCb = DEFAULT_TOOLS.find(x => x.id === "charbuilder");
   tools.forEach(t => {
     const inferred = inferToolSuite(t);
@@ -1142,6 +1167,7 @@ function saveTools() {
 
 function toolIconSvg(kind) {
   if (kind === "tag")    return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.41 0l7.59-7.59a1 1 0 0 0 0-1.41L12 2Z"/><path d="M7 7h.01"/></svg>';
+  if (kind === "phone")  return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><path d="M9.5 11.5 11.5 13.5 15 9.5"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>';
   if (kind === "shield") return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>';
   return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
 }
@@ -1419,8 +1445,13 @@ async function launchCachedTool(toolId) {
     ? "calc(68px + env(safe-area-inset-bottom))"
     : "max(12px,env(safe-area-inset-bottom))";
   const backClick = "try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}location.reload()";
-  const backBtn = `<button onclick="${backClick}" aria-label="${backAria}" style="position:fixed;left:12px;bottom:${backBottom};z-index:2147483647;background:#161513;color:#f3efe6;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:7px 12px;font:600 12px/1 -apple-system,Segoe UI,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;opacity:.88">${backLabel}</button>`;
-  const out = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, backBtn + "</body>") : (html + backBtn);
+  const backBtn = `<style>@media print{#xfHubBackBtn{display:none!important}}</style><button id="xfHubBackBtn" type="button" onclick="${backClick}" aria-label="${backAria}" style="position:fixed!important;left:12px!important;bottom:${backBottom}!important;z-index:2147483647!important;width:auto!important;min-width:0!important;min-height:0!important;margin:0!important;background:#161513!important;color:#f3efe6!important;border:1px solid rgba(255,255,255,.22)!important;border-radius:999px!important;padding:7px 12px!important;font:600 12px/1 -apple-system,Segoe UI,sans-serif!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;cursor:pointer!important;opacity:.88!important">${backLabel}</button>`;
+  const lowerHtml = html.toLowerCase();
+  const bodyIdx = lowerHtml.lastIndexOf("</body>");
+  const htmlIdx = lowerHtml.lastIndexOf("</html>");
+  const out = bodyIdx !== -1
+    ? html.slice(0, bodyIdx) + backBtn + html.slice(bodyIdx)
+    : (htmlIdx !== -1 ? html.slice(0, htmlIdx) + backBtn + html.slice(htmlIdx) : html + backBtn);
   document.open();
   document.write(out);
   document.close();
@@ -1985,6 +2016,15 @@ function saveToolEdits(toolId) {
 
 function removeTool(toolId) {
   tools = tools.filter(x => x.id !== toolId);
+  if (DEFAULT_TOOLS.some(d => d.id === toolId)) {
+    try {
+      const dismissed = JSON.parse(localStorage.getItem(LS_DISMISSED) || "[]");
+      if (Array.isArray(dismissed) && !dismissed.includes(toolId)) {
+        dismissed.push(toolId);
+        localStorage.setItem(LS_DISMISSED, JSON.stringify(dismissed));
+      }
+    } catch {}
+  }
   saveTools();
   closeSheet();
   showToast("Removed tool");
