@@ -1,5 +1,5 @@
-// XF-HUB Offline-First Service Worker (Build 1795749710201)
-const CACHE = "xfhub-pwa-1795749710201";
+// XF-HUB Offline-First Service Worker (Build 1795750685049)
+const CACHE = "xfhub-pwa-1795750685049";
 const CORE = ["./", "./index.html", "./XF-HUB.html", "./manifest.json", "./apple-touch-icon.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
