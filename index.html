@@ -13,13 +13,18 @@
 <title>XF-HUB</title>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795786140000;
+var XF_BUILD=1795786400000;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
-  function openDb(){ return new Promise(function(res,rej){ var r=indexedDB.open("xfhub_store",1);
-    r.onupgradeneeded=function(){ if(!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
-    r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); }; }); }
+  function openDb(){ return new Promise(function(res,rej){
+    if(typeof indexedDB==="undefined"){ rej(new Error("no-idb")); return; }
+    try{
+      var r=indexedDB.open("xfhub_store",1);
+      r.onupgradeneeded=function(){ if(!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
+      r.onsuccess=function(){ res(r.result); }; r.onerror=function(){ rej(r.error); };
+    }catch(e){ rej(e); }
+  }); }
   function kvGet(k){ return openDb().then(function(d){ return new Promise(function(res,rej){ var q=d.transaction("kv").objectStore("kv").get(k); q.onsuccess=function(){ res(q.result); }; q.onerror=function(){ rej(q.error); }; }); }); }
   function kvPut(k,v){ return openDb().then(function(d){ return new Promise(function(res,rej){ var t=d.transaction("kv","readwrite"); t.objectStore("kv").put(v,k); t.oncomplete=res; t.onerror=function(){ rej(t.error); }; }); }); }
   function sane(v){ return v>0 && v<=Date.now()+864e5; }
@@ -165,7 +170,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
   body::before {
     content: "";
     position: fixed;
-    inset: 0;
+    top: 0; right: 0; bottom: 0; left: 0;
     pointer-events: none;
     opacity: 0.032;
     z-index: 100;
@@ -175,9 +180,29 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
   .hidden { display: none !important; }
   svg { display: block; flex-shrink: 0; }
 
+  /* Universal Keyboard / Smart TV Remote D-Pad Focus Ring */
+  .tile:focus, .btn:focus, .pin-tile:focus, .row:focus, .suite-tab:focus, .seg-tab:focus,
+  .icon-btn:focus, .chip-btn:focus, .gate-tile:focus, .logo-btn:focus, .device-pill:focus,
+  .dock-btn:focus, .sheet-close:focus, .tile-more:focus, .drive-card:focus, .sec-link:focus,
+  .text-link:focus, .kind-pill:focus {
+    outline: 2.5px solid var(--accent);
+    outline-offset: 2px;
+  }
+  @supports selector(:focus-visible) {
+    .tile:focus:not(:focus-visible), .btn:focus:not(:focus-visible), .pin-tile:focus:not(:focus-visible),
+    .row:focus:not(:focus-visible), .suite-tab:focus:not(:focus-visible), .seg-tab:focus:not(:focus-visible),
+    .icon-btn:focus:not(:focus-visible), .chip-btn:focus:not(:focus-visible), .gate-tile:focus:not(:focus-visible),
+    .logo-btn:focus:not(:focus-visible), .device-pill:focus:not(:focus-visible), .dock-btn:focus:not(:focus-visible),
+    .sheet-close:focus:not(:focus-visible), .tile-more:focus:not(:focus-visible), .drive-card:focus:not(:focus-visible),
+    .sec-link:focus:not(:focus-visible), .text-link:focus:not(:focus-visible), .kind-pill:focus:not(:focus-visible) {
+      outline: none;
+    }
+  }
+
   /* ---------- MODE GATE ---------- */
   .gate-wrap {
     min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px;
     padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); animation: fadeIn 0.25s var(--ease);
   }
   .gate { width: 100%; max-width: 430px; text-align: center; }
@@ -311,6 +336,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
     gap: 16px; margin: 4px 2px 16px; flex-wrap: wrap;
   }
   .hero-time {
+    font-size: 38px;
     font-size: clamp(32px, 5vw, 44px); font-weight: 700; letter-spacing: -0.04em;
     line-height: 1; display: flex; align-items: baseline; gap: 8px;
   }
@@ -540,14 +566,14 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 
   /* ---------- DRAWER / BOTTOM SHEET ---------- */
   .backdrop {
-    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.52);
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0, 0, 0, 0.52);
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
     opacity: 0; pointer-events: none; transition: opacity 0.22s var(--ease); z-index: 50;
   }
   .backdrop.open { opacity: 1; pointer-events: auto; }
   .sheet {
     position: fixed; top: 12px; right: 12px; bottom: 12px;
-    width: min(440px, calc(100vw - 24px));
+    width: calc(100vw - 24px); max-width: 440px;
     background: var(--surface); border: 1px solid var(--line-strong);
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
     border-radius: 20px; display: flex; flex-direction: column;
@@ -586,7 +612,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
   /* ---------- MOBILE BOTTOM DOCK ---------- */
   .dock {
     display: none; position: fixed; left: 12px; right: 12px;
-    bottom: max(12px, env(safe-area-inset-bottom)); height: 60px;
+    bottom: 12px; bottom: max(12px, env(safe-area-inset-bottom)); height: 60px;
     background: var(--surface); border: 1px solid var(--line-strong);
     box-shadow: 0 10px 30px rgba(0,0,0,0.32); border-radius: 20px; padding: 4px;
     gap: 4px; z-index: 40;
@@ -627,7 +653,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
   @keyframes fadeUp { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 
   @media (max-width: 720px) {
-    .shell { padding: max(14px, env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom)); }
+    .shell { padding: 14px 12px 92px; padding: max(14px, env(safe-area-inset-top)) 12px calc(92px + env(safe-area-inset-bottom)); }
     .search-input, .field, textarea.pad { font-size: 16px; }
     .launcher-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
     .drive-strip { grid-template-columns: 1fr; gap: 9px; }
@@ -637,7 +663,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
     .suite-sub { display: none; }
     .dock { display: flex; }
     .sheet {
-      top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-height: 85vh;
+      top: auto; left: 0; right: 0; bottom: 0; width: 100%; max-width: none; max-height: 85vh;
       border-radius: 22px 22px 0 0; border-bottom: 0; transform: translateY(100%);
     }
     .sheet.open { transform: translateY(0); }
@@ -645,6 +671,13 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
       display: block; width: 38px; height: 4px; border-radius: 99px;
       background: var(--line-strong); margin: 10px auto 0; flex-shrink: 0;
     }
+  }
+  @media (min-width: 1440px) {
+    body { font-size: 15.5px; }
+    .shell { max-width: 1080px; padding: 28px 24px 96px; }
+    .tile { min-height: 124px; padding: 18px; }
+    .tile-name { font-size: 16px; }
+    .tile-meta { font-size: 12.5px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -855,7 +888,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 
 <!-- Mobile Thumb Dock -->
 <nav id="mobileDock" class="dock hidden" aria-label="Quick navigation">
-  <button class="dock-btn active" onclick="closeStorageView();window.scrollTo({top:0,behavior:'smooth'})">
+  <button class="dock-btn active" onclick="closeStorageView();safeScrollTop()">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
     Home
   </button>
@@ -921,13 +954,14 @@ const DEFAULT_PT_EMAIL = atob("YmxzMzU5NEBnbWFpbC5jb20=");
 
 const ENV = (() => {
   const ua = navigator.userAgent || "";
+  const isTV = /SmartTV|SMART-TV|Tizen|Web0S|webOS|BRAVIA|AFT|AppleTV|CrKey|Vewd|NetCast|Opera TV|PlayStation|Xbox|Nintendo/i.test(ua);
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isAndroid = /Android/i.test(ua);
+  const isAndroid = /Android/i.test(ua) && !isTV;
   const isMobile = isIOS || isAndroid;
-  const isWin = /Win/i.test(ua) && !isMobile;
-  const isMac = /Mac/i.test(ua) && !isMobile;
+  const isWin = /Win/i.test(ua) && !isMobile && !isTV;
+  const isMac = /Mac/i.test(ua) && !isMobile && !isTV;
   const isStandalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-  return { isIOS, isAndroid, isMobile, isWin, isMac, isStandalone };
+  return { isTV, isIOS, isAndroid, isMobile, isWin, isMac, isStandalone };
 })();
 let deferredInstallPrompt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstallPrompt = e; });
@@ -1030,23 +1064,110 @@ const fmtStamp = ms => {
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 };
 
-// ---------- INDEXEDDB HELPER (SHARED WITH SELF-UPDATER) ----------
+// ---------- UNIVERSAL BROWSER & TV HELPERS ----------
+function utf8Encode(str) {
+  const s = String(str == null ? "" : str);
+  if (typeof TextEncoder !== "undefined") return new TextEncoder().encode(s);
+  const out = [];
+  for (let i = 0; i < s.length; i++) {
+    let c = s.charCodeAt(i);
+    if (c < 0x80) { out.push(c); }
+    else if (c < 0x800) { out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f)); }
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
+      const n = s.charCodeAt(++i);
+      const cp = ((c - 0xd800) << 10) + (n - 0xdc00) + 0x10000;
+      out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+    } else {
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+  }
+  return new Uint8Array(out);
+}
+function utf8Decode(bytes) {
+  if (typeof TextDecoder !== "undefined") return new TextDecoder("utf-8").decode(bytes);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  try { return decodeURIComponent(escape(bin)); } catch (e) { return bin; }
+}
+function readFileText(file) {
+  if (file && typeof file.text === "function") return file.text();
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result || ""));
+    r.onerror = () => rej(r.error || new Error("Read failed"));
+    r.readAsText(file);
+  });
+}
+function safeScrollTop() {
+  try { window.scrollTo({ top: 0, behavior: "smooth" }); }
+  catch (e) { try { window.scrollTo(0, 0); } catch (e2) {} }
+}
+function safeOpenUrl(url) {
+  if (!url) return;
+  let w = null;
+  try { w = window.open(url, "_blank", "noopener"); } catch (e) {}
+  if (!w) { try { window.location.href = url; } catch (e2) {} }
+}
+function getQueryParam(name) {
+  try {
+    if (typeof URLSearchParams !== "undefined") return new URLSearchParams(location.search).get(name) || "";
+  } catch (e) {}
+  const q = (location.search || "").replace(/^\?/, "").split("&");
+  for (let i = 0; i < q.length; i++) {
+    const idx = q[i].indexOf("=");
+    const k = idx >= 0 ? q[i].slice(0, idx) : q[i];
+    if (decodeURIComponent(k) === name) return idx >= 0 ? decodeURIComponent(q[i].slice(idx + 1).replace(/\+/g, " ")) : "";
+  }
+  return "";
+}
+
+// ---------- INDEXEDDB + MEMORY + OFFLINE USB BUNDLE STORE ----------
+const memToolCache = Object.create(null);
+let _bundledCache = null;
+function getBundledTools() {
+  if (_bundledCache !== null) return _bundledCache;
+  _bundledCache = Object.create(null);
+  try {
+    const el = document.getElementById("xfBundledTools");
+    if (el && el.textContent && el.textContent.trim()) {
+      const parsed = JSON.parse(el.textContent);
+      if (parsed && typeof parsed === "object") _bundledCache = parsed;
+    }
+  } catch (e) {}
+  return _bundledCache;
+}
 function idbOpen() {
   return new Promise((res, rej) => {
-    const r = indexedDB.open("xfhub_store", 1);
-    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
-    r.onsuccess = () => res(r.result);
-    r.onerror = () => rej(r.error);
+    if (typeof indexedDB === "undefined") { rej(new Error("no-idb")); return; }
+    try {
+      const r = indexedDB.open("xfhub_store", 1);
+      r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
   });
 }
 function idbGet(k) {
+  if (Object.prototype.hasOwnProperty.call(memToolCache, k)) return Promise.resolve(memToolCache[k]);
   return idbOpen().then(d => new Promise((res, rej) => {
     const q = d.transaction("kv").objectStore("kv").get(k);
     q.onsuccess = () => res(q.result);
     q.onerror = () => rej(q.error);
-  })).catch(() => null);
+  })).catch(() => null).then(val => {
+    if (val != null) { memToolCache[k] = val; return val; }
+    const b = getBundledTools();
+    if (k.indexOf("tool_html_") === 0) {
+      const id = k.slice(10);
+      if (b[id] && b[id].html) return b[id].html;
+    } else if (k.indexOf("tool_meta_") === 0) {
+      const id = k.slice(10);
+      if (b[id] && b[id].meta) return b[id].meta;
+    }
+    return null;
+  });
 }
 function idbPut(k, v) {
+  memToolCache[k] = v;
   return idbOpen().then(d => new Promise((res, rej) => {
     const t = d.transaction("kv", "readwrite");
     t.objectStore("kv").put(v, k);
@@ -1057,27 +1178,28 @@ function idbPut(k, v) {
 
 async function shortSha256(text) {
   try {
-    const buf = new TextEncoder().encode(text);
-    const hash = await crypto.subtle.digest("SHA-256", buf);
-    return Array.from(new Uint8Array(hash)).slice(0, 4).map(b => b.toString(16).padStart(2, "0")).join("");
-  } catch {
-    let h = 2166136261;
-    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return (h >>> 0).toString(16).padStart(8, "0");
-  }
+    if (typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function") {
+      const buf = utf8Encode(text);
+      const hash = await crypto.subtle.digest("SHA-256", buf);
+      return Array.from(new Uint8Array(hash)).slice(0, 4).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+  } catch (e) {}
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(16).padStart(8, "0");
 }
 
 // ---------- THEME & CLOCK ----------
 function applyTheme(theme) {
   document.documentElement.setAttribute("data-theme", theme === "paper" ? "paper" : "obsidian");
-  try { localStorage.setItem(LS_THEME, theme); } catch {}
+  try { localStorage.setItem(LS_THEME, theme); } catch (_e) {}
 }
 function toggleTheme() {
   const cur = document.documentElement.getAttribute("data-theme") === "paper" ? "paper" : "obsidian";
   applyTheme(cur === "paper" ? "obsidian" : "paper");
   showToast(cur === "paper" ? "Obsidian" : "Field Paper");
 }
-try { applyTheme(localStorage.getItem(LS_THEME) || "obsidian"); } catch {}
+try { applyTheme(localStorage.getItem(LS_THEME) || "obsidian"); } catch (_e) {}
 
 function updateClock() {
   const now = new Date();
@@ -1103,11 +1225,19 @@ function showToast(msg) {
 }
 
 async function copyText(val) {
-  try { await navigator.clipboard.writeText(val); }
-  catch {
-    const ta = document.createElement("textarea");
-    ta.value = val; document.body.appendChild(ta); ta.select();
-    document.execCommand("copy"); ta.remove();
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(val);
+    } else {
+      throw new Error("no-clipboard");
+    }
+  } catch (e) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = val; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); ta.remove();
+    } catch (e2) {}
   }
   showToast("Copied " + val);
 }
@@ -1130,11 +1260,11 @@ function loadTools() {
   try {
     const dRaw = JSON.parse(localStorage.getItem(LS_DISMISSED) || "[]");
     if (Array.isArray(dRaw)) dismissed = dRaw;
-  } catch {}
+  } catch (_e) {}
   try {
     const raw = JSON.parse(localStorage.getItem(LS_TOOLS) || "null");
     tools = Array.isArray(raw) && raw.length ? raw : DEFAULT_TOOLS.map(x => Object.assign({}, x));
-  } catch { tools = DEFAULT_TOOLS.map(x => Object.assign({}, x)); }
+  } catch (_e) { tools = DEFAULT_TOOLS.map(x => Object.assign({}, x)); }
   DEFAULT_TOOLS.forEach(def => {
     if (!dismissed.includes(def.id) && !tools.some(t => t.id === def.id)) {
       tools.push(Object.assign({}, def));
@@ -1152,7 +1282,7 @@ function loadTools() {
       migrated = true;
     }
   });
-  if (migrated) { try { localStorage.setItem(LS_TOOLS, JSON.stringify(tools)); } catch {} }
+  if (migrated) { try { localStorage.setItem(LS_TOOLS, JSON.stringify(tools)); } catch (_e) {} }
   Promise.all(tools.map(async t => {
     const meta = await idbGet("tool_meta_" + t.id);
     if (meta) toolCacheMeta[t.id] = meta;
@@ -1164,7 +1294,7 @@ function loadTools() {
 }
 
 function saveTools() {
-  try { localStorage.setItem(LS_TOOLS, JSON.stringify(tools)); } catch {}
+  try { localStorage.setItem(LS_TOOLS, JSON.stringify(tools)); } catch (_e) {}
   renderTools();
 }
 
@@ -1180,7 +1310,7 @@ let _icarusPendingAction = "open";
 let _icarusVerified = false;
 
 function sha256Hex(str) {
-  const bytes = new TextEncoder().encode(String(str));
+  const bytes = utf8Encode(str);
   const K = [
     0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
     0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
@@ -1227,7 +1357,7 @@ function sha256Hex(str) {
 }
 
 function getIcarusUrl() {
-  try { return (localStorage.getItem(LS_ICARUS_URL) || "").trim(); } catch { return ""; }
+  try { return (localStorage.getItem(LS_ICARUS_URL) || "").trim(); } catch (_e) { return ""; }
 }
 function parseIcarusInput(raw) {
   let s = String(raw || "").trim();
@@ -1236,7 +1366,7 @@ function parseIcarusInput(raw) {
     s = (/^(127\.0\.0\.1|localhost|\[::1\])(?::|\/|$)/i.test(s) ? "http://" : "https://") + s;
   }
   let u;
-  try { u = new URL(s); } catch { return null; }
+  try { u = new URL(s); } catch (_e) { return null; }
   const isLoopback = ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname.toLowerCase());
   if (u.protocol !== "https:" && !(u.protocol === "http:" && isLoopback)) return null;
   return { origin: u.origin, launchUrl: u.href, hasToken: /[#&]t=/.test(u.hash || "") };
@@ -1265,10 +1395,10 @@ function submitIcarusPin(ev) {
   _icarusPendingAction = "open";
   if (action === "open") {
     const saved = getIcarusUrl();
-    const target = saved || (!ENV.isMobile ? "http://127.0.0.1:8789" : "");
+    const target = saved || (!ENV.isMobile && !ENV.isTV ? "http://127.0.0.1:8789" : "");
     if (target) {
       closeSheet();
-      window.open(target, "_blank", "noopener");
+      safeOpenUrl(target);
       return;
     }
   }
@@ -1279,21 +1409,21 @@ function saveIcarusSettings(andOpen) {
   const inp = document.getElementById("icarusUrlIn");
   const parsed = parseIcarusInput(inp ? inp.value : "");
   if (!parsed) { showToast("Enter an https:// Tailscale URL or http://127.0.0.1:8789"); return; }
-  try { localStorage.setItem(LS_ICARUS_URL, parsed.origin); } catch {}
+  try { localStorage.setItem(LS_ICARUS_URL, parsed.origin); } catch (e) {}
   renderTools();
   closeSheet();
   showToast(parsed.hasToken ? "Icarus paired (token not stored)" : "Icarus URL saved");
-  if (andOpen) window.open(parsed.launchUrl, "_blank", "noopener");
+  if (andOpen) safeOpenUrl(parsed.launchUrl);
 }
 function useLocalIcarus() {
-  try { localStorage.setItem(LS_ICARUS_URL, "http://127.0.0.1:8789"); } catch {}
+  try { localStorage.setItem(LS_ICARUS_URL, "http://127.0.0.1:8789"); } catch (e) {}
   renderTools();
   closeSheet();
   showToast("Icarus set to local PC");
-  window.open("http://127.0.0.1:8789", "_blank", "noopener");
+  safeOpenUrl("http://127.0.0.1:8789");
 }
 function clearIcarusUrl() {
-  try { localStorage.removeItem(LS_ICARUS_URL); } catch {}
+  try { localStorage.removeItem(LS_ICARUS_URL); } catch (_e) {}
   renderTools();
   _icarusVerified = true;
   openSheet("icarus");
@@ -1452,7 +1582,7 @@ async function decodeToolResponse(hr, fname, encoding) {
     const ds = new DecompressionStream("gzip");
     return new Response(new Blob([buf]).stream().pipeThrough(ds)).text();
   }
-  return new TextDecoder("utf-8").decode(bytes);
+  return utf8Decode(bytes);
 }
 
 async function syncTool(toolId, verbose) {
@@ -1508,7 +1638,7 @@ async function syncTool(toolId, verbose) {
   // 2. Optional Private GitHub Repo Sync (My Device only + user's personal PAT!)
   if (currentMode === "my" && t.ghRepo && t.ghPath) {
     let pat = "";
-    try { pat = (localStorage.getItem(LS_GH_PAT) || "").trim(); } catch {}
+    try { pat = (localStorage.getItem(LS_GH_PAT) || "").trim(); } catch (_e) {}
     if (!pat) {
       if (verbose) showToast("Add GitHub token or load local HTML file");
       return "no-auth";
@@ -1527,7 +1657,7 @@ async function syncTool(toolId, verbose) {
       renderTools();
       if (verbose) showToast(`Synced private ${t.name} (#${sha})`);
       return "updated";
-    } catch {
+    } catch (_e) {
       if (verbose) showToast(`GitHub sync failed for ${t.name}`);
       return "error";
     }
@@ -1561,7 +1691,7 @@ async function smartTapTool(toolId) {
   const cached = await idbGet("tool_html_" + toolId);
   if (cached) return launchCachedTool(toolId);
   // If tool has a live feed or configured private GitHub PAT, fetch & launch in 1 tap!
-  const hasPat = currentMode === "my" && t.ghRepo && (() => { try { return !!(localStorage.getItem(LS_GH_PAT) || "").trim(); } catch { return false; } })();
+  const hasPat = currentMode === "my" && t.ghRepo && (() => { try { return !!(localStorage.getItem(LS_GH_PAT) || "").trim(); } catch (_e) { return false; } })();
   if (t.feedBase || hasPat) {
     pendingLaunchId = toolId;
     showToast("Opening " + t.name + "...");
@@ -1576,29 +1706,30 @@ async function smartTapTool(toolId) {
   openToolSheet(toolId);
 }
 
-async function launchCachedTool(toolId) {
+async function launchCachedTool(toolId, _retried) {
   const html = await idbGet("tool_html_" + toolId);
   if (!html) {
+    if (_retried) { showToast("Tool unavailable offline — load HTML file"); openToolSheet(toolId); return; }
     const r = await syncTool(toolId, true);
-    if (r === "updated" || r === "current") return launchCachedTool(toolId);
+    if (r === "updated" || r === "current") return launchCachedTool(toolId, true);
     return;
   }
-  try { localStorage.setItem(LS_LAST_TOOL, toolId); } catch {}
+  try { localStorage.setItem(LS_LAST_TOOL, toolId); } catch (e) {}
   if (location.hash === "#xf" || location.hash === "#ep") {
-    try { history.replaceState(null, "", location.pathname + location.search); } catch {}
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
   }
   // Clean up Hub timers, listeners, and globals so the launched tool starts with a pristine window
   clearInterval(clockTimer);
   document.removeEventListener("keydown", xfKeyHandler);
-  Object.keys(XF_API).forEach(k => { try { delete window[k]; } catch {} });
-  // Inject a tiny unobtrusive floating back pill so iPhone Home Screen PWA mode always has a 1-tap return to the hub
+  Object.keys(XF_API).forEach(k => { try { delete window[k]; } catch (e) {} });
+  // Inject a tiny unobtrusive floating back pill (+ TV Back / Alt+Left) so phones, tablets & Smart TVs always have 1-tap return
   const backLabel = currentSuite === "ep" ? "‹ EP" : "‹ XF";
   const backAria = currentSuite === "ep" ? "Back to EPTools" : "Back to XF-HUB";
   const backBottom = toolId === "charbuilder"
     ? "calc(68px + env(safe-area-inset-bottom))"
     : "max(12px,env(safe-area-inset-bottom))";
   const backClick = "try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}location.reload()";
-  const backBtn = `<style>@media print{#xfHubBackBtn{display:none!important}}</style><button id="xfHubBackBtn" type="button" onclick="${backClick}" aria-label="${backAria}" style="position:fixed!important;left:12px!important;bottom:${backBottom}!important;z-index:2147483647!important;width:auto!important;min-width:0!important;min-height:0!important;margin:0!important;background:#161513!important;color:#f3efe6!important;border:1px solid rgba(255,255,255,.22)!important;border-radius:999px!important;padding:7px 12px!important;font:600 12px/1 -apple-system,Segoe UI,sans-serif!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;cursor:pointer!important;opacity:.88!important">${backLabel}</button>`;
+  const backBtn = `<style>@media print{#xfHubBackBtn{display:none!important}}#xfHubBackBtn:focus{outline:2.5px solid #ff5d24!important;outline-offset:2px!important}</style><button id="xfHubBackBtn" type="button" onclick="${backClick}" aria-label="${backAria}" style="position:fixed!important;left:12px!important;bottom:12px!important;bottom:${backBottom}!important;z-index:2147483647!important;width:auto!important;min-width:0!important;min-height:0!important;margin:0!important;background:#161513!important;color:#f3efe6!important;border:1px solid rgba(255,255,255,.22)!important;border-radius:999px!important;padding:7px 12px!important;font:600 12px/1 -apple-system,Segoe UI,sans-serif!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;cursor:pointer!important;opacity:.88!important">${backLabel}</button><script>(function(){document.addEventListener("keydown",function(e){if((e.altKey&&e.key==="ArrowLeft")||e.keyCode===461||e.keyCode===10009){e.preventDefault();${backClick}}});})();<\/script>`;
   const lowerHtml = html.toLowerCase();
   const bodyIdx = lowerHtml.lastIndexOf("</body>");
   const htmlIdx = lowerHtml.lastIndexOf("</html>");
@@ -1628,7 +1759,7 @@ document.getElementById("toolFileInput").addEventListener("change", async (e) =>
   const f = e.target.files[0];
   e.target.value = "";
   if (!f || !pendingLocalToolId) return;
-  const html = await f.text();
+  const html = await readFileText(f);
   if (!/<\/html>/i.test(html)) return showToast("Not a valid HTML tool file");
   const sha = await shortSha256(html);
   const meta = { v: f.lastModified || Date.now(), sha, file: f.name, bytes: html.length, source: "local", updatedAt: new Date(f.lastModified || Date.now()).toISOString().slice(0, 10) };
@@ -1738,7 +1869,7 @@ function openStorageView() {
   syncVisibility();
   renderAuditBar();
   renderMain();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  safeScrollTop();
 }
 
 function closeStorageView() {
@@ -1766,7 +1897,7 @@ function downloadScoutSh() {
   triggerDownload("xf-scout.sh", atob(EMBEDDED["scan-mac-linux.sh"]), "text/x-shellscript");
 }
 
-function getCleanSelfHtml() {
+function getCleanSelfHtml(bundledMap) {
   const clone = document.documentElement.cloneNode(true);
   clone.removeAttribute("data-suite");
   const g = clone.querySelector("#modeGate"); if (g) g.classList.add("hidden");
@@ -1780,18 +1911,40 @@ function getCleanSelfHtml() {
   const sp = clone.querySelector("#searchPanel"); if (sp) { sp.innerHTML = ""; sp.classList.add("hidden"); }
   const si = clone.querySelector("#searchInput"); if (si) si.value = "";
   const t = clone.querySelector("#toast"); if (t) t.classList.remove("show");
+  const oldB = clone.querySelector("#xfBundledTools"); if (oldB) oldB.remove();
+  if (bundledMap && Object.keys(bundledMap).length) {
+    const sc = document.createElement("script");
+    sc.id = "xfBundledTools";
+    sc.type = "application/json";
+    sc.textContent = JSON.stringify(bundledMap).replace(/</g, "\\u003c");
+    const body = clone.querySelector("body");
+    if (body) body.appendChild(sc);
+  }
   return "<!DOCTYPE html>\n" + clone.outerHTML;
 }
 
-function downloadOfflineHtml() {
-  triggerDownload("XF-HUB.html", getCleanSelfHtml(), "text/html;charset=utf-8");
+async function downloadOfflineHtml() {
+  const bundled = Object.create(null);
+  let count = 0;
+  for (let i = 0; i < tools.length; i++) {
+    const tid = tools[i].id;
+    const html = await idbGet("tool_html_" + tid);
+    if (html) {
+      const meta = (await idbGet("tool_meta_" + tid)) || toolCacheMeta[tid] || { v: Date.now(), sha: await shortSha256(html), file: tid + ".html", bytes: html.length, source: "bundled", updatedAt: new Date().toISOString().slice(0, 10) };
+      bundled[tid] = { html, meta: Object.assign({}, meta, { source: "bundled" }) };
+      count++;
+    }
+  }
+  const fname = count ? "XF-HUB-Portable.html" : "XF-HUB.html";
+  triggerDownload(fname, getCleanSelfHtml(count ? bundled : null), "text/html;charset=utf-8");
+  if (count) showToast("Saved portable USB file with " + count + " offline tool" + (count === 1 ? "" : "s"));
 }
 
 function downloadFullInstaller() {
   const htmlCopy = getCleanSelfHtml();
   const htmlB64 = btoa(unescape(encodeURIComponent(htmlCopy)));
-  const feedBase = ((() => { try { const c = (localStorage.getItem("xfhub.self.feed") || "").trim(); return (c && c !== "off") ? c : XF_DEFAULT_FEED; } catch { return XF_DEFAULT_FEED; } })());
-  const psLiveSync = "$feed='" + feedBase.replace(/'/g, "''") + "'; try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Encoding=[Text.UTF8Encoding]::new($false); $tk=[DateTime]::UtcNow.Ticks; $vj=$wc.DownloadString($feed+'version.json?t='+$tk) | ConvertFrom-Json; $curH=Get-Content -LiteralPath (Join-Path $dst 'XF-HUB.html') -Raw -Encoding UTF8; $curV=0; if($curH -match 'var XF_BUILD=(\\d+);'){ $curV=[int64]$Matches[1] }; if([int64]$vj.v -gt $curV){ Write-Host ('Pulling live XF-HUB build ' + $vj.v + '...') -ForegroundColor Cyan; $fn=if($vj.file){$vj.file}else{'XF-HUB.html'}; $nh=$wc.DownloadString($feed+[Uri]::EscapeDataString($fn)+'?t='+$tk); $nhV=0; if($nh -match 'var XF_BUILD=(\\d+);'){ $nhV=[int64]$Matches[1] }; if(($nhV -gt $curV) -and ($nh.TrimEnd() -like '*</html>')){ [IO.File]::WriteAllText((Join-Path $dst 'XF-HUB.html'), $nh, [Text.UTF8Encoding]::new($false)); if($nh -match 'const EMBEDDED = (\\{[^\\r\\n]+\\});'){ $em=$Matches[1] | ConvertFrom-Json; $smap=@{'Common.ps1'='scripts\\Common.ps1';'Tidy-PC.ps1'='scripts\\Tidy-PC.ps1';'Audit-PC.ps1'='scripts\\Audit-PC.ps1';'Nightly-Audit.ps1'='scripts\\Nightly-Audit.ps1';'Scan-Device.ps1'='scripts\\Scan-Device.ps1';'Install-XFHub.ps1'='scripts\\Install-XFHub.ps1';'Invoke-XFProtocol.ps1'='scripts\\Invoke-XFProtocol.ps1'}; foreach($pr in $em.PSObject.Properties){ $rel=if($smap.ContainsKey($pr.Name)){$smap[$pr.Name]}else{$pr.Name}; $tp=Join-Path $dst $rel; [IO.File]::WriteAllBytes($tp,[Convert]::FromBase64String($pr.Value)) } }; Write-Host ('Updated to latest live build ' + $nhV + '.') -ForegroundColor Green } } } catch { Write-Host 'Offline mode: installing embedded build.' -ForegroundColor DarkGray }";
+  const feedBase = ((() => { try { const c = (localStorage.getItem("xfhub.self.feed") || "").trim(); return (c && c !== "off") ? c : XF_DEFAULT_FEED; } catch (_e) { return XF_DEFAULT_FEED; } })());
+  const psLiveSync = "$feed='" + feedBase.replace(/'/g, "''") + "'; try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Encoding=[Text.UTF8Encoding]::new($false); $tk=[DateTime]::UtcNow.Ticks; $vj=$wc.DownloadString($feed+'version.json?t='+$tk) | ConvertFrom-Json; $curH=Get-Content -LiteralPath (Join-Path $dst 'XF-HUB.html') -Raw -Encoding UTF8; $curV=0; if($curH -match 'var XF_BUILD=(\\d+);'){ $curV=[int64]$Matches[1] }; if([int64]$vj.v -gt $curV){ Write-Host ('Pulling live XF-HUB build ' + $vj.v + '...') -ForegroundColor Cyan; $fn=if($vj.file){$vj.file}else{'XF-HUB.html'}; $nh=$wc.DownloadString($feed+[Uri]::EscapeDataString($fn)+'?t='+$tk); $nhV=0; if($nh -match 'var XF_BUILD=(\\d+);'){ $nhV=[int64]$Matches[1] }; if(($nhV -gt $curV) -and ($nh.TrimEnd() -like '*</html>')){ [IO.File]::WriteAllText((Join-Path $dst 'XF-HUB.html'), $nh, [Text.UTF8Encoding]::new($false)); if($nh -match 'const EMBEDDED = (\\{[^\\r\\n]+\\});'){ $em=$Matches[1] | ConvertFrom-Json; $smap=@{'Common.ps1'='scripts\\Common.ps1';'Tidy-PC.ps1'='scripts\\Tidy-PC.ps1';'Audit-PC.ps1'='scripts\\Audit-PC.ps1';'Nightly-Audit.ps1'='scripts\\Nightly-Audit.ps1';'Scan-Device.ps1'='scripts\\Scan-Device.ps1';'Install-XFHub.ps1'='scripts\\Install-XFHub.ps1';'Invoke-XFProtocol.ps1'='scripts\\Invoke-XFProtocol.ps1'}; foreach($pr in $em.PSObject.Properties){ $rel=if($smap.ContainsKey($pr.Name)){$smap[$pr.Name]}else{$pr.Name}; $tp=Join-Path $dst $rel; [IO.File]::WriteAllBytes($tp,[Convert]::FromBase64String($pr.Value)) } }; Write-Host ('Updated to latest live build ' + $nhV + '.') -ForegroundColor Green } } } catch (_e) { Write-Host 'Offline mode: installing embedded build.' -ForegroundColor DarkGray }";
   const lines = [
     '@echo off',
     'setlocal',
@@ -1846,7 +1999,7 @@ function setGateMode(mode) {
 function applySuite(suite, persist) {
   currentSuite = (suite === "ep") ? "ep" : "xf";
   const isEp = (currentSuite === "ep");
-  if (persist !== false) { try { localStorage.setItem(LS_SUITE, currentSuite); } catch {} }
+  if (persist !== false) { try { localStorage.setItem(LS_SUITE, currentSuite); } catch (_e) {} }
   document.documentElement.setAttribute("data-suite", currentSuite);
   document.title = isEp ? "EPTools · Express Pawn" : "XF-HUB · XFTools";
   const logo = document.getElementById("logoBtn");
@@ -1896,7 +2049,7 @@ function openModeGate() {
 
 function selectMode(mode) {
   currentMode = (mode === "other") ? "other" : "my";
-  try { localStorage.setItem(LS_MODE, currentMode); } catch {}
+  try { localStorage.setItem(LS_MODE, currentMode); } catch (_e) {}
   const isMy = (currentMode === "my");
   document.getElementById("modeGate").classList.add("hidden");
   document.getElementById("appShell").classList.remove("hidden");
@@ -1915,18 +2068,18 @@ function loadPins() {
   try {
     const raw = JSON.parse(localStorage.getItem(LS_PINS) || "null");
     pins = Array.isArray(raw) ? raw : DEFAULT_PINS.slice();
-  } catch { pins = DEFAULT_PINS.slice(); }
+  } catch (_e) { pins = DEFAULT_PINS.slice(); }
   renderPins();
 }
 function savePins() {
-  try { localStorage.setItem(LS_PINS, JSON.stringify(pins)); } catch {}
+  try { localStorage.setItem(LS_PINS, JSON.stringify(pins)); } catch (_e) {}
   renderPins();
 }
 function renderPins() {
   const el = document.getElementById("pinnedGrid");
   if (!el) return;
-  // On phones, only show actionable URL pins on the home grid (Windows path pins remain in Edit / Add)
-  const visible = ENV.isMobile ? pins.filter(p => p.kind === "url") : pins;
+  // On phones, Smart TVs, and non-Windows devices, show actionable URL pins on the home grid (Windows path pins remain in Edit / Add)
+  const visible = (ENV.isMobile || ENV.isTV || !ENV.isWin) ? pins.filter(p => p.kind === "url") : pins;
   el.innerHTML = visible.map(p => {
     const badge = (p.label || "?").slice(0, 2).toUpperCase();
     if (p.kind === "url") {
@@ -1944,7 +2097,7 @@ function addPin() {
 }
 function deletePin(id) { pins = pins.filter(p => p.id !== id); savePins(); openSheet("pins"); }
 function resetDefaultPins() { pins = DEFAULT_PINS.slice(); savePins(); openSheet("pins"); showToast("Reset"); }
-function clearPad() { try { localStorage.removeItem(LS_PAD); } catch {} const el = document.getElementById("padArea"); if (el) el.value = ""; showToast("Cleared"); }
+function clearPad() { try { localStorage.removeItem(LS_PAD); } catch (_e) {} const el = document.getElementById("padArea"); if (el) el.value = ""; showToast("Cleared"); }
 function selectDevice(id) { activeId = id; renderMain(); closeSheet(); }
 
 // ---------- SNAPSHOTS ----------
@@ -1955,17 +2108,17 @@ function loadSnapshots() {
   try {
     const saved = JSON.parse(localStorage.getItem(LS_SNAPS) || "[]");
     if (Array.isArray(saved)) saved.forEach(s => { if (s && s.id && !map.has(s.id)) map.set(s.id, s); });
-  } catch {}
+  } catch (_e) {}
   snapshots = Array.from(map.values());
   if (snapshots.length && (!activeId || !snapshots.some(s => s.id === activeId))) activeId = snapshots[0].id;
   renderMain();
 }
 function saveBrowserSnapshot(snap) {
   let saved = [];
-  try { saved = JSON.parse(localStorage.getItem(LS_SNAPS) || "[]"); } catch {}
+  try { saved = JSON.parse(localStorage.getItem(LS_SNAPS) || "[]"); } catch (_e) {}
   saved = saved.filter(x => x.id !== snap.id);
   saved.unshift(snap);
-  try { localStorage.setItem(LS_SNAPS, JSON.stringify(saved.slice(0, 8))); } catch {}
+  try { localStorage.setItem(LS_SNAPS, JSON.stringify(saved.slice(0, 8))); } catch (_e) {}
   snapshots = snapshots.filter(x => x.id !== snap.id);
   snapshots.unshift(snap);
   activeId = snap.id;
@@ -2021,7 +2174,7 @@ const searchPanel = document.getElementById("searchPanel");
 const searchClear = document.getElementById("searchClear");
 const kbdHint     = document.getElementById("kbdHint");
 
-function focusSearch() { window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => searchInput.focus(), 100); }
+function focusSearch() { safeScrollTop(); setTimeout(() => searchInput.focus(), 100); }
 function clearSearch() {
   searchInput.value = ""; searchPanel.classList.add("hidden");
   searchClear.classList.add("hidden"); kbdHint.classList.remove("hidden"); searchTopAction = null;
@@ -2032,7 +2185,7 @@ function tryEvalMath(raw) {
   try {
     const val = Function('"use strict"; return (' + expr + ')')();
     if (typeof val === "number" && isFinite(val)) return Number.isInteger(val) ? String(val) : String(Math.round(val * 10000) / 10000);
-  } catch {}
+  } catch (_e) {}
   return null;
 }
 
@@ -2160,9 +2313,11 @@ function openToolSheet(toolId) {
 
 function saveToolEdits(toolId) {
   const t = tools.find(x => x.id === toolId); if (!t) return;
-  const ns = document.getElementById("edSuite")?.value;
+  const elSuite = document.getElementById("edSuite");
+  const elFeed = document.getElementById("edFeed");
+  const ns = elSuite ? elSuite.value : "";
   if (ns === "ep" || ns === "xf") t.suite = ns;
-  t.feedBase = (document.getElementById("edFeed")?.value || "").trim();
+  t.feedBase = (elFeed ? elFeed.value : "").trim();
   if (document.getElementById("edRepo")) t.ghRepo = document.getElementById("edRepo").value.trim();
   if (document.getElementById("edGhPath")) t.ghPath = document.getElementById("edGhPath").value.trim();
   t.sourceType = t.feedBase ? "feed" : "private";
@@ -2180,7 +2335,7 @@ function removeTool(toolId) {
         dismissed.push(toolId);
         localStorage.setItem(LS_DISMISSED, JSON.stringify(dismissed));
       }
-    } catch {}
+    } catch (_e) {}
   }
   saveTools();
   closeSheet();
@@ -2188,12 +2343,13 @@ function removeTool(toolId) {
 }
 
 function addNewTool() {
-  const name = (document.getElementById("ntName")?.value || "").trim();
-  const suite = document.getElementById("ntSuite")?.value === "ep" ? "ep" : "xf";
-  const scope = (document.getElementById("ntScope")?.value || "").trim() || (suite === "ep" ? "Express Pawn" : "Tool");
-  const feed = (document.getElementById("ntFeed")?.value || "").trim();
-  const repo = (document.getElementById("ntRepo")?.value || "").trim();
-  const gpath = (document.getElementById("ntPath")?.value || "").trim();
+  const valOf = id => { const el = document.getElementById(id); return el ? el.value : ""; };
+  const name = valOf("ntName").trim();
+  const suite = valOf("ntSuite") === "ep" ? "ep" : "xf";
+  const scope = valOf("ntScope").trim() || (suite === "ep" ? "Express Pawn" : "Tool");
+  const feed = valOf("ntFeed").trim();
+  const repo = valOf("ntRepo").trim();
+  const gpath = valOf("ntPath").trim();
   if (!name) return showToast("Enter tool name");
   const id = "t_" + Date.now();
   tools.push({ id, name, suite, scope, color: suite === "ep" ? "ico-amber" : "ico-mono", icon: suite === "ep" ? "tag" : "bolt", sourceType: feed ? "feed" : "private", feedBase: feed, ghRepo: repo, ghPath: gpath, localPath: "" });
@@ -2207,10 +2363,10 @@ function loadPlaytestItems() {
   try {
     const arr = JSON.parse(localStorage.getItem(LS_PLAYTEST) || "[]");
     return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
+  } catch (_e) { return []; }
 }
 function savePlaytestItems(arr) {
-  try { localStorage.setItem(LS_PLAYTEST, JSON.stringify(arr)); } catch {}
+  try { localStorage.setItem(LS_PLAYTEST, JSON.stringify(arr)); } catch (_e) {}
   renderTools();
 }
 
@@ -2221,12 +2377,13 @@ function setPtKind(val) {
 }
 
 async function submitPlaytest(mode) {
-  const appId = document.getElementById("ptApp")?.value || "XF-HUB";
-  const kind  = document.getElementById("ptKind")?.value || "Idea";
-  const whoRaw = (document.getElementById("ptWho")?.value || "").trim();
-  if (whoRaw) { try { localStorage.setItem(LS_PT_WHO, whoRaw); } catch {} }
+  const valOf = id => { const el = document.getElementById(id); return el ? el.value : ""; };
+  const appId = valOf("ptApp") || "XF-HUB";
+  const kind  = valOf("ptKind") || "Idea";
+  const whoRaw = valOf("ptWho").trim();
+  if (whoRaw) { try { localStorage.setItem(LS_PT_WHO, whoRaw); } catch (e) {} }
   const who   = whoRaw || "Tester";
-  const note  = (document.getElementById("ptNote")?.value || "").trim();
+  const note  = valOf("ptNote").trim();
   if (!note) return showToast("Write a quick note first");
 
   const t = tools.find(x => x.id === appId);
@@ -2265,7 +2422,7 @@ async function submitPlaytest(mode) {
   }
   if (mode === "email") {
     let to = DEFAULT_PT_EMAIL;
-    try { to = (localStorage.getItem(LS_PT_EMAIL) || to).trim(); } catch {}
+    try { to = (localStorage.getItem(LS_PT_EMAIL) || to).trim(); } catch (_e) {}
     const subj = encodeURIComponent(`[Playtest] ${entry.app} (${entry.kind}) - ${entry.build}`);
     const body = encodeURIComponent(mdBlock);
     window.location.href = `mailto:${to}?subject=${subj}&body=${body}`;
@@ -2275,7 +2432,7 @@ async function submitPlaytest(mode) {
   }
   if (mode === "webhook") {
     let hook = "";
-    try { hook = (localStorage.getItem(LS_PT_HOOK) || "").trim(); } catch {}
+    try { hook = (localStorage.getItem(LS_PT_HOOK) || "").trim(); } catch (_e) {}
     if (!hook) return showToast("No webhook set (saved locally)");
     try {
       await fetch(hook, {
@@ -2284,7 +2441,7 @@ async function submitPlaytest(mode) {
         body: JSON.stringify({ content: mdBlock, playtest: entry })
       });
       showToast("Sent to webhook & saved");
-    } catch {
+    } catch (_e) {
       showToast("Webhook offline — saved locally");
     }
     openSheet("playtest");
@@ -2315,7 +2472,8 @@ function copyDevPrompt(id) {
 }
 
 function importPlaytestPaste() {
-  const raw = (document.getElementById("ptImportIn")?.value || "").trim();
+  const el = document.getElementById("ptImportIn");
+  const raw = (el ? el.value : "").trim();
   if (!raw) return showToast("Paste a feedback JSON line");
   const m = raw.match(/\{[\s\S]*\}/);
   if (!m) return showToast("No JSON found");
@@ -2329,7 +2487,7 @@ function importPlaytestPaste() {
     savePlaytestItems(items);
     openSheet("playtest-triage");
     showToast("Imported note for " + obj.app);
-  } catch { showToast("Invalid feedback block"); }
+  } catch (_e) { showToast("Invalid feedback block"); }
 }
 
 // ---------- GENERAL SHEETS ----------
@@ -2342,11 +2500,11 @@ function openSheet(kind) {
   if (kind === "playtest" || kind === "playtest-triage") {
     const items = loadPlaytestItems();
     let hasHook = false;
-    try { hasHook = !!(localStorage.getItem(LS_PT_HOOK) || "").trim(); } catch {}
+    try { hasHook = !!(localStorage.getItem(LS_PT_HOOK) || "").trim(); } catch (_e) {}
     const isTriage = (kind === "playtest-triage" && isMy);
     titleEl.textContent = isTriage ? `Playtest Triage (${items.length})` : "Playtest";
     let lastTool = "", savedWho = "";
-    try { lastTool = localStorage.getItem(LS_LAST_TOOL) || ""; savedWho = localStorage.getItem(LS_PT_WHO) || ""; } catch {}
+    try { lastTool = localStorage.getItem(LS_LAST_TOOL) || ""; savedWho = localStorage.getItem(LS_PT_WHO) || ""; } catch (_e) {}
     const curTools = activeSuiteTools();
     const othTools = otherSuiteTools();
     const defaultApp = curTools.some(t => t.id === lastTool) ? lastTool : (curTools[0] ? curTools[0].id : (lastTool || "XF-HUB"));
@@ -2481,7 +2639,7 @@ function openSheet(kind) {
       ghPat = localStorage.getItem(LS_GH_PAT) || "";
       ptEmail = localStorage.getItem(LS_PT_EMAIL) || DEFAULT_PT_EMAIL;
       ptHook = localStorage.getItem(LS_PT_HOOK) || "";
-    } catch {}
+    } catch (_e) {}
     const activeFeedLabel = hubFeed === "off" ? "Disabled" : (hubFeed || "blsxf/xf-hub (Live)");
     const primaryHubBtns = isEp ? `
       <div style="display:grid;gap:8px">
@@ -2588,7 +2746,7 @@ function openSheet(kind) {
     `;
   } else if (kind === "pad") {
     titleEl.textContent = "Scratchpad";
-    let saved = ""; try { saved = localStorage.getItem(LS_PAD) || ""; } catch {}
+    let saved = ""; try { saved = localStorage.getItem(LS_PAD) || ""; } catch (_e) {}
     bodyEl.innerHTML = `
       <textarea id="padArea" class="pad" placeholder="Quick notes, serials, links... (saved offline)">${esc(saved)}</textarea>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -2597,7 +2755,7 @@ function openSheet(kind) {
       </div>
     `;
     document.getElementById("padArea").addEventListener("input", e => {
-      try { localStorage.setItem(LS_PAD, e.target.value); } catch {}
+      try { localStorage.setItem(LS_PAD, e.target.value); } catch (_e) {}
     });
   } else if (kind === "pins") {
     titleEl.textContent = "Pinned";
@@ -2678,16 +2836,17 @@ function openSheet(kind) {
 }
 
 function saveSyncSettings() {
-  const f = (document.getElementById("hubFeedIn")?.value || "").trim();
-  const p = (document.getElementById("ghPatIn")?.value || "").trim();
-  const e = (document.getElementById("ptEmailIn")?.value || "").trim();
-  const h = (document.getElementById("ptHookIn")?.value || "").trim();
+  const valOf = id => { const el = document.getElementById(id); return el ? el.value : ""; };
+  const f = valOf("hubFeedIn").trim();
+  const p = valOf("ghPatIn").trim();
+  const e = valOf("ptEmailIn").trim();
+  const h = valOf("ptHookIn").trim();
   try {
     if (f) localStorage.setItem("xfhub.self.feed", f); else localStorage.removeItem("xfhub.self.feed");
     if (p) localStorage.setItem(LS_GH_PAT, p); else localStorage.removeItem(LS_GH_PAT);
     if (e) localStorage.setItem(LS_PT_EMAIL, e); else localStorage.removeItem(LS_PT_EMAIL);
     if (h) localStorage.setItem(LS_PT_HOOK, h); else localStorage.removeItem(LS_PT_HOOK);
-  } catch {}
+  } catch (err) {}
   showToast("Saved settings");
   syncAllTools(true);
 }
@@ -2703,14 +2862,63 @@ function closeSheet() {
   document.getElementById("sheet").classList.remove("open");
 }
 
-function xfKeyHandler(e) {
-  if (e.key === "Escape") {
-    const isSheetOpen = document.getElementById("sheet")?.classList.contains("open");
-    if (isSheetOpen) { closeSheet(); }
-    else if (searchInput.value) { clearSearch(); }
-    else if (activeView === "storage") { closeStorageView(); }
+function dpadMove(dir) {
+  const sheetEl = document.getElementById("sheet");
+  const gateEl = document.getElementById("modeGate");
+  const scope = (sheetEl && sheetEl.classList.contains("open"))
+    ? sheetEl
+    : ((gateEl && !gateEl.classList.contains("hidden")) ? gateEl : document.body);
+  const nodes = Array.from(scope.querySelectorAll('button:not([disabled]), a[href], [role="button"], .row[onclick], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'))
+    .filter(el => el.offsetParent !== null && !el.closest(".hidden"));
+  nodes.forEach(n => { if (n.classList.contains("row") && n.getAttribute("tabindex") === null) n.setAttribute("tabindex", "0"); });
+  if (!nodes.length) return;
+  const cur = document.activeElement;
+  if (!cur || nodes.indexOf(cur) === -1) { nodes[0].focus(); return; }
+  const cr = cur.getBoundingClientRect();
+  const cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
+  let best = null, bestScore = Infinity;
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i];
+    if (n === cur) continue;
+    const r = n.getBoundingClientRect();
+    const nx = r.left + r.width / 2, ny = r.top + r.height / 2;
+    const dx = nx - cx, dy = ny - cy;
+    if (dir === "ArrowRight" && dx <= 6) continue;
+    if (dir === "ArrowLeft"  && dx >= -6) continue;
+    if (dir === "ArrowDown"  && dy <= 6) continue;
+    if (dir === "ArrowUp"    && dy >= -6) continue;
+    const primary = (dir === "ArrowLeft" || dir === "ArrowRight") ? Math.abs(dx) : Math.abs(dy);
+    const cross   = (dir === "ArrowLeft" || dir === "ArrowRight") ? Math.abs(dy) : Math.abs(dx);
+    const score = primary + cross * 2.4;
+    if (score < bestScore) { bestScore = score; best = n; }
   }
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); closeStorageView(); focusSearch(); }
+  if (best) {
+    best.focus();
+    try { best.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) {}
+  }
+}
+
+function xfKeyHandler(e) {
+  const tag = (document.activeElement && document.activeElement.tagName || "").toUpperCase();
+  const typing = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT");
+  const isBack = (e.key === "Escape" || e.key === "GoBack" || e.key === "BrowserBack" || e.keyCode === 461 || e.keyCode === 10009 || (e.key === "Backspace" && !typing));
+  if (isBack) {
+    const sheetEl = document.getElementById("sheet");
+    const isSheetOpen = sheetEl && sheetEl.classList.contains("open");
+    if (isSheetOpen) { e.preventDefault(); closeSheet(); return; }
+    if (searchInput && searchInput.value) { e.preventDefault(); clearSearch(); return; }
+    if (activeView === "storage") { e.preventDefault(); closeStorageView(); return; }
+  }
+  if ((e.metaKey || e.ctrlKey) && (e.key || "").toLowerCase() === "k") { e.preventDefault(); closeStorageView(); focusSearch(); return; }
+  if (!typing && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    dpadMove(e.key);
+    return;
+  }
+  if (!typing && (e.key === "Enter" || e.key === " ") && document.activeElement && document.activeElement.classList.contains("row") && document.activeElement.onclick) {
+    e.preventDefault();
+    document.activeElement.click();
+  }
 }
 document.addEventListener("keydown", xfKeyHandler);
 
@@ -2782,9 +2990,9 @@ document.getElementById("multiFileInput").addEventListener("change", handlePicke
 document.getElementById("jsonInput").addEventListener("change", async (e) => {
   const f = e.target.files[0]; if (!f) return;
   try {
-    const obj = JSON.parse(await f.text());
+    const obj = JSON.parse(await readFileText(f));
     if (obj && obj.deviceName) { saveBrowserSnapshot(obj); closeSheet(); showToast("Loaded " + obj.deviceName); }
-  } catch { showToast("Invalid JSON"); }
+  } catch (err) { showToast("Invalid JSON"); }
   e.target.value = "";
 });
 
@@ -2798,7 +3006,7 @@ const XF_API = {
   copyText, deletePin, deletePlaytestItem, downloadAuditCmd, downloadFullInstaller, downloadOfflineHtml,
   downloadScoutCmd, downloadScoutSh, enterSuite, exportJson, filterApps, focusSearch, importPlaytestPaste,
   launchCachedTool, openIcarus, openIcarusSettings, openModeGate, openSheet, openStorageView, openToolSheet, pickFolder, pickJson,
-  pickLocalToolHtml, removeTool, renderMain, resetDefaultPins, runAudit, saveCachedToolFile, saveIcarusSettings, savePins,
+  pickLocalToolHtml, removeTool, renderMain, resetDefaultPins, runAudit, safeOpenUrl, safeScrollTop, saveCachedToolFile, saveIcarusSettings, savePins,
   saveSyncSettings, saveToolEdits, selectDevice, selectMode, selectSuite, setGateMode, setPlaytestStatus,
   setPtKind, showToast, smartTapTool, submitIcarusPin, submitPlaytest, syncAllTools, syncTool, toggleTheme, triggerProtocol,
   triggerPwaInstall, useLocalIcarus
@@ -2810,11 +3018,10 @@ loadPins();
 loadSnapshots();
 loadTools();
 let savedMode = null, savedSuite = null;
-try { savedMode = localStorage.getItem(LS_MODE); savedSuite = localStorage.getItem(LS_SUITE); } catch {}
-const urlParams = new URLSearchParams(location.search);
+try { savedMode = localStorage.getItem(LS_MODE); savedSuite = localStorage.getItem(LS_SUITE); } catch (e) {}
 const hashSuite = (location.hash || "").replace(/^#/, "").toLowerCase();
-const reqSuite = (urlParams.get("suite") || (hashSuite === "ep" || hashSuite === "xf" ? hashSuite : "")).toLowerCase();
-const reqMode = (urlParams.get("mode") || "").toLowerCase();
+const reqSuite = (getQueryParam("suite") || (hashSuite === "ep" || hashSuite === "xf" ? hashSuite : "")).toLowerCase();
+const reqMode = getQueryParam("mode").toLowerCase();
 if (reqSuite === "ep" || reqSuite === "xf") {
   applySuite(reqSuite, true);
   selectMode(reqMode === "other" ? "other" : (reqMode === "my" ? "my" : (savedMode === "other" ? "other" : "my")));
