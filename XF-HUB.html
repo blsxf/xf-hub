@@ -13,7 +13,7 @@
 <title>XF-HUB</title>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795782514905;
+var XF_BUILD=1795786140000;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
@@ -389,6 +389,8 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
   .ico-green  { background: rgba(56, 201, 138, 0.13); border-color: rgba(56, 201, 138, 0.26); color: var(--ok); }
   .ico-blue   { background: rgba(56, 189, 248, 0.13); border-color: rgba(56, 189, 248, 0.28); color: #38bdf8; }
   [data-theme="paper"] .ico-blue { background: rgba(2, 132, 199, 0.11); border-color: rgba(2, 132, 199, 0.26); color: #0284c7; }
+  .ico-purple { background: rgba(168, 85, 247, 0.14); border-color: rgba(168, 85, 247, 0.30); color: #c084fc; }
+  [data-theme="paper"] .ico-purple { background: rgba(126, 34, 206, 0.10); border-color: rgba(126, 34, 206, 0.24); color: #7e22ce; }
   .ico-mono   { background: var(--surface-2);         border-color: var(--line);              color: var(--text); }
 
   .status-led {
@@ -914,6 +916,7 @@ const LS_PT_EMAIL = "xf_hub_playtest_email_v1";
 const LS_PT_HOOK  = "xf_hub_playtest_hook_v1";
 const LS_PT_WHO   = "xf_hub_playtest_who_v1";
 const LS_LAST_TOOL = "xf_hub_last_tool_v1";
+const LS_ICARUS_URL = "xf_hub_icarus_url_v1";
 const DEFAULT_PT_EMAIL = atob("YmxzMzU5NEBnbWFpbC5jb20=");
 
 const ENV = (() => {
@@ -1172,6 +1175,131 @@ function toolIconSvg(kind) {
   return '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
 }
 
+const ICARUS_PIN_HASH = "1d94103a0cb8830034eeb6152285543f8d33c6c7bfbbda86aa66d9b59dd7cc0f";
+let _icarusPendingAction = "open";
+let _icarusVerified = false;
+
+function sha256Hex(str) {
+  const bytes = new TextEncoder().encode(String(str));
+  const K = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  const H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const bitLen = bytes.length * 8;
+  const padLen = ((bytes.length + 9 + 63) & ~63);
+  const buf = new Uint8Array(padLen);
+  buf.set(bytes);
+  buf[bytes.length] = 0x80;
+  const dv = new DataView(buf.buffer);
+  dv.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+  dv.setUint32(padLen - 4, bitLen >>> 0, false);
+  const w = new Uint32Array(64);
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  for (let i = 0; i < padLen; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = dv.getUint32(i + t * 4, false);
+    for (let t = 16; t < 64; t++) {
+      const s0 = rotr(w[t-15], 7) ^ rotr(w[t-15], 18) ^ (w[t-15] >>> 3);
+      const s1 = rotr(w[t-2], 17) ^ rotr(w[t-2], 19) ^ (w[t-2] >>> 10);
+      w[t] = (w[t-16] + s0 + w[t-7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let t = 0; t < 64; t++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (h + S1 + ch + K[t] + w[t]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0;
+      d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    H[0]=(H[0]+a)>>>0; H[1]=(H[1]+b)>>>0; H[2]=(H[2]+c)>>>0; H[3]=(H[3]+d)>>>0;
+    H[4]=(H[4]+e)>>>0; H[5]=(H[5]+f)>>>0; H[6]=(H[6]+g)>>>0; H[7]=(H[7]+h)>>>0;
+  }
+  return H.map(x => x.toString(16).padStart(8, "0")).join("");
+}
+
+function getIcarusUrl() {
+  try { return (localStorage.getItem(LS_ICARUS_URL) || "").trim(); } catch { return ""; }
+}
+function parseIcarusInput(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) {
+    s = (/^(127\.0\.0\.1|localhost|\[::1\])(?::|\/|$)/i.test(s) ? "http://" : "https://") + s;
+  }
+  let u;
+  try { u = new URL(s); } catch { return null; }
+  const isLoopback = ["127.0.0.1", "localhost", "[::1]"].includes(u.hostname.toLowerCase());
+  if (u.protocol !== "https:" && !(u.protocol === "http:" && isLoopback)) return null;
+  return { origin: u.origin, launchUrl: u.href, hasToken: /[#&]t=/.test(u.hash || "") };
+}
+function promptIcarusUnlock(action) {
+  _icarusPendingAction = action || "open";
+  _icarusVerified = false;
+  openSheet("icarus-lock");
+}
+function openIcarus() {
+  promptIcarusUnlock("open");
+}
+function openIcarusSettings() {
+  promptIcarusUnlock("settings");
+}
+function submitIcarusPin(ev) {
+  if (ev) ev.preventDefault();
+  const inp = document.getElementById("icarusPinIn");
+  const code = String(inp ? inp.value : "").trim();
+  if (!code || sha256Hex("xf-icarus-gate:" + code) !== ICARUS_PIN_HASH) {
+    if (inp) { inp.value = ""; inp.focus(); }
+    showToast("Incorrect code");
+    return;
+  }
+  const action = _icarusPendingAction;
+  _icarusPendingAction = "open";
+  if (action === "open") {
+    const saved = getIcarusUrl();
+    const target = saved || (!ENV.isMobile ? "http://127.0.0.1:8789" : "");
+    if (target) {
+      closeSheet();
+      window.open(target, "_blank", "noopener");
+      return;
+    }
+  }
+  _icarusVerified = true;
+  openSheet("icarus");
+}
+function saveIcarusSettings(andOpen) {
+  const inp = document.getElementById("icarusUrlIn");
+  const parsed = parseIcarusInput(inp ? inp.value : "");
+  if (!parsed) { showToast("Enter an https:// Tailscale URL or http://127.0.0.1:8789"); return; }
+  try { localStorage.setItem(LS_ICARUS_URL, parsed.origin); } catch {}
+  renderTools();
+  closeSheet();
+  showToast(parsed.hasToken ? "Icarus paired (token not stored)" : "Icarus URL saved");
+  if (andOpen) window.open(parsed.launchUrl, "_blank", "noopener");
+}
+function useLocalIcarus() {
+  try { localStorage.setItem(LS_ICARUS_URL, "http://127.0.0.1:8789"); } catch {}
+  renderTools();
+  closeSheet();
+  showToast("Icarus set to local PC");
+  window.open("http://127.0.0.1:8789", "_blank", "noopener");
+}
+function clearIcarusUrl() {
+  try { localStorage.removeItem(LS_ICARUS_URL); } catch {}
+  renderTools();
+  _icarusVerified = true;
+  openSheet("icarus");
+  showToast("Icarus URL cleared");
+}
+
 function renderTools() {
   const el = document.getElementById("toolsGrid");
   if (!el) return;
@@ -1202,6 +1330,31 @@ function renderTools() {
         </div>
       </button>
     `;
+    if (isMy) {
+      const icUrl = getIcarusUrl();
+      let icLed = "", icMeta = "Locked · Tap to pair";
+      if (icUrl) {
+        icLed = "live";
+        icMeta = "Locked · Tailscale AI Hub";
+      } else if (!ENV.isMobile) {
+        icLed = "live";
+        icMeta = "Locked · Local AI Hub";
+      }
+      html += `
+        <div class="tile" role="button" tabindex="0" onclick="openIcarus()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openIcarus()}">
+          <div class="tile-top">
+            <div class="tile-ico ico-purple"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+            <button class="tile-more" title="Icarus connection settings" aria-label="Icarus connection settings" onclick="event.stopPropagation();openIcarusSettings()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            </button>
+          </div>
+          <div>
+            <div class="tile-name">Icarus</div>
+            <div class="tile-meta num"><span class="status-led ${icLed}"></span>${esc(icMeta)}</div>
+          </div>
+        </div>
+      `;
+    }
   }
 
   suiteTools.forEach(t => {
@@ -1904,6 +2057,10 @@ searchInput.addEventListener("input", () => {
     }
   });
   if (currentSuite === "xf") {
+    if (currentMode === "my" && ("icarus ai claude codex gemini gemma tailscale".includes(q) || q.includes("icarus"))) {
+      if (!searchTopAction) searchTopAction = () => openIcarus();
+      rows.push(`<div class="row" onclick="openIcarus()"><div class="row-left"><div class="row-title">Icarus</div><div class="row-sub">Private AI Hub · Claude, Codex, Local Gemma &amp; Gemini via Tailscale</div></div><div class="row-right">Open</div></div>`);
+    }
     if ("storage analysis drives disk scout".includes(q)) {
       if (!searchTopAction) searchTopAction = () => openStorageView();
       rows.push(`<div class="row" onclick="openStorageView()"><div class="row-left"><div class="row-title">Storage Analysis</div><div class="row-sub">Drives, Folders, Recent, Largest, Apps &amp; PC Audit</div></div><div class="row-right">Open</div></div>`);
@@ -2387,6 +2544,48 @@ function openSheet(kind) {
         <button class="btn" onclick="selectMode('my');openSheet('hub')">Switch to My Device</button>
       </div>
     `;
+  } else if (kind === "icarus-lock") {
+    titleEl.textContent = "Unlock Icarus";
+    bodyEl.innerHTML = `
+      <form onsubmit="submitIcarusPin(event)" style="display:grid;gap:10px">
+        <div style="font-size:13px;color:var(--muted)">Enter your access code to continue.</div>
+        <input id="icarusPinIn" class="field" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" placeholder="Enter code" style="text-align:center;font-size:20px;letter-spacing:0.35em;font-family:var(--mono)">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button type="submit" class="btn pri">Unlock</button>
+          <button type="button" class="btn" onclick="closeSheet()">Cancel</button>
+        </div>
+      </form>
+    `;
+    setTimeout(() => { const el = document.getElementById("icarusPinIn"); if (el) el.focus(); }, 60);
+  } else if (kind === "icarus") {
+    if (!_icarusVerified) {
+      _icarusPendingAction = "settings";
+      openSheet("icarus-lock");
+      return;
+    }
+    _icarusVerified = false;
+    titleEl.textContent = "Icarus · Private AI Hub";
+    const saved = getIcarusUrl();
+    const effective = saved || (!ENV.isMobile ? "http://127.0.0.1:8789" : "");
+    bodyEl.innerHTML = `
+      <div class="list-box">
+        <div class="kv-row"><span class="kv-k">Status</span><span class="kv-v">${saved ? "Paired (this device)" : (!ENV.isMobile ? "Desktop Local Default" : "Not paired yet")}</span></div>
+        <div class="kv-row"><span class="kv-k">Endpoint</span><span class="kv-v num">${esc(effective || "Not set")}</span></div>
+        <div class="kv-row"><span class="kv-k">Privacy</span><span class="kv-v">Saved on this device only · login token stripped</span></div>
+      </div>
+      <div class="sec-title">Connect via Tailscale</div>
+      <div style="display:grid;gap:8px">
+        <input id="icarusUrlIn" class="field" type="url" placeholder="Paste Setup-IcarusPhone link or https://...ts.net" value="${esc(saved)}">
+        <button class="btn pri" onclick="saveIcarusSettings(true)">Connect &amp; Open</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn" onclick="saveIcarusSettings(false)">Save Only</button>
+          ${saved ? `<button class="btn" onclick="clearIcarusUrl()">Disconnect</button>` : (!ENV.isMobile ? `<button class="btn" onclick="useLocalIcarus()">Use Local PC</button>` : `<button class="btn" onclick="closeSheet()">Cancel</button>`)}
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5">
+        Paste the one-time <code>/login#t=...</code> link printed by <code>Setup-IcarusPhone.ps1</code>. XF-HUB opens it once to sign this browser in, and only saves the clean <code>https://...ts.net</code> address locally (never the token).
+      </div>
+    `;
   } else if (kind === "pad") {
     titleEl.textContent = "Scratchpad";
     let saved = ""; try { saved = localStorage.getItem(LS_PAD) || ""; } catch {}
@@ -2595,14 +2794,14 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
 }
 
 const XF_API = {
-  addNewTool, addPin, clearPad, clearSearch, closeSheet, closeStorageView, copyDevPrompt, copyEpDirectLink,
+  addNewTool, addPin, clearIcarusUrl, clearPad, clearSearch, closeSheet, closeStorageView, copyDevPrompt, copyEpDirectLink,
   copyText, deletePin, deletePlaytestItem, downloadAuditCmd, downloadFullInstaller, downloadOfflineHtml,
   downloadScoutCmd, downloadScoutSh, enterSuite, exportJson, filterApps, focusSearch, importPlaytestPaste,
-  launchCachedTool, openModeGate, openSheet, openStorageView, openToolSheet, pickFolder, pickJson,
-  pickLocalToolHtml, removeTool, renderMain, resetDefaultPins, runAudit, saveCachedToolFile, savePins,
+  launchCachedTool, openIcarus, openIcarusSettings, openModeGate, openSheet, openStorageView, openToolSheet, pickFolder, pickJson,
+  pickLocalToolHtml, removeTool, renderMain, resetDefaultPins, runAudit, saveCachedToolFile, saveIcarusSettings, savePins,
   saveSyncSettings, saveToolEdits, selectDevice, selectMode, selectSuite, setGateMode, setPlaytestStatus,
-  setPtKind, showToast, smartTapTool, submitPlaytest, syncAllTools, syncTool, toggleTheme, triggerProtocol,
-  triggerPwaInstall
+  setPtKind, showToast, smartTapTool, submitIcarusPin, submitPlaytest, syncAllTools, syncTool, toggleTheme, triggerProtocol,
+  triggerPwaInstall, useLocalIcarus
 };
 Object.assign(window, XF_API);
 
