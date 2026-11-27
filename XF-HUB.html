@@ -13,7 +13,7 @@
 <title>XF-HUB</title>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795748828347;
+var XF_BUILD=1795749050046;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
@@ -339,6 +339,21 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 
   .tile-chev { color: var(--dim); transition: transform 0.18s var(--spring), color 0.14s; }
   .tile:hover .tile-chev { color: var(--accent); transform: translateX(3px); }
+  .tile-more {
+    appearance: none; border: 0; background: transparent; color: var(--dim);
+    width: 32px; height: 32px; margin: -6px -6px 0 0; border-radius: 9px;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    transition: color 0.14s, background 0.14s;
+  }
+  .tile-more:hover { color: var(--text); background: var(--line); }
+  .kind-pills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .kind-pill {
+    appearance: none; min-height: 38px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--muted);
+    font-family: var(--sans); font-size: 12.5px; font-weight: 620; cursor: pointer;
+    transition: background 0.14s, color 0.14s, border-color 0.14s;
+  }
+  .kind-pill.active { background: var(--surface-2); border-color: var(--accent); color: var(--text); }
   .tile-name { font-size: 14.5px; font-weight: 660; letter-spacing: -0.01em; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tile-meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -631,14 +646,10 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 
   <div id="envEmpty" class="scout-bar hidden">
     <div>
-      <div style="font-weight:600;font-size:14px">No snapshot loaded</div>
+      <div style="font-weight:600;font-size:14px">This device</div>
       <div style="font-size:12px;color:var(--muted)">Read-only · 0 files changed</div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn pri sm" onclick="pickFolder()">Scan Folder</button>
-      <button class="btn sm" onclick="downloadScoutCmd()">Win Scout</button>
-      <button class="btn sm" onclick="pickJson()">Import</button>
-    </div>
+    <div id="envEmptyActions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
 
   <div id="envLoaded" class="hidden">
@@ -742,7 +753,28 @@ const LS_GH_PAT = "xf_hub_gh_pat_v1";
 const LS_PLAYTEST = "xf_hub_playtest_v1";
 const LS_PT_EMAIL = "xf_hub_playtest_email_v1";
 const LS_PT_HOOK  = "xf_hub_playtest_hook_v1";
+const LS_PT_WHO   = "xf_hub_playtest_who_v1";
+const LS_LAST_TOOL = "xf_hub_last_tool_v1";
 const DEFAULT_PT_EMAIL = atob("YmxzMzU5NEBnbWFpbC5jb20=");
+
+const ENV = (() => {
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isMobile = isIOS || isAndroid;
+  const isWin = /Win/i.test(ua) && !isMobile;
+  const isMac = /Mac/i.test(ua) && !isMobile;
+  const isStandalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  return { isIOS, isAndroid, isMobile, isWin, isMac, isStandalone };
+})();
+let deferredInstallPrompt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstallPrompt = e; });
+async function triggerPwaInstall() {
+  if (!deferredInstallPrompt) return syncAllTools(true);
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+}
 
 // Default Tool Channels — each verifies version / SHA-256 and caches newest build in IndexedDB
 const DEFAULT_TOOLS = [
@@ -952,21 +984,23 @@ function renderTools() {
       const dt = m.v ? fmtStamp(m.v) : (m.updatedAt || "");
       sub = `${dt ? dt + " · " : ""}#${m.sha}`;
     } else if (t.sourceType === "feed" && t.feedBase) {
-      sub = `${t.scope} · Ready to sync`;
+      sub = `${t.scope} · Tap to open`;
     } else {
       sub = `${t.scope} · Private cache`;
     }
     html += `
-      <button class="tile" onclick="openToolSheet(${JSON.stringify(t.id)})">
+      <div class="tile" role="button" tabindex="0" onclick="smartTapTool(${JSON.stringify(t.id)})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();smartTapTool(${JSON.stringify(t.id)})}">
         <div class="tile-top">
           <div class="tile-ico ${esc(t.color || "ico-mono")}">${toolIconSvg(t.icon)}</div>
-          <svg class="tile-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+          <button class="tile-more" title="Tool options" aria-label="Tool options" onclick="event.stopPropagation();openToolSheet(${JSON.stringify(t.id)})">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+          </button>
         </div>
         <div>
           <div class="tile-name">${esc(t.name)}</div>
           <div class="tile-meta num"><span class="status-led ${ledCls}"></span>${esc(sub)}</div>
         </div>
-      </button>
+      </div>
     `;
   });
 
@@ -1070,6 +1104,22 @@ async function syncAllTools(verbose) {
   if (verbose) showToast(updated ? `Updated ${updated} tool${updated === 1 ? "" : "s"}` : "XF-HUB & live tools up to date");
 }
 
+async function smartTapTool(toolId) {
+  const t = tools.find(x => x.id === toolId);
+  if (!t) return;
+  const cached = await idbGet("tool_html_" + toolId);
+  if (cached) return launchCachedTool(toolId);
+  // If tool has a live feed or configured private GitHub PAT, fetch & launch in 1 tap!
+  const hasPat = currentMode === "my" && t.ghRepo && (() => { try { return !!(localStorage.getItem(LS_GH_PAT) || "").trim(); } catch { return false; } })();
+  if (t.feedBase || hasPat) {
+    showToast("Opening " + t.name + "...");
+    const r = await syncTool(toolId, false);
+    if (r === "updated" || r === "current") return launchCachedTool(toolId);
+    showToast("Offline — load local HTML for " + t.name);
+  }
+  openToolSheet(toolId);
+}
+
 async function launchCachedTool(toolId) {
   const html = await idbGet("tool_html_" + toolId);
   if (!html) {
@@ -1077,6 +1127,7 @@ async function launchCachedTool(toolId) {
     if (r === "updated" || r === "current") return launchCachedTool(toolId);
     return;
   }
+  try { localStorage.setItem(LS_LAST_TOOL, toolId); } catch {}
   // Inject a tiny unobtrusive floating back pill so iPhone Home Screen PWA mode always has a 1-tap return to XF-HUB
   const backBtn = '<button onclick="location.reload()" aria-label="Back to XF-HUB" style="position:fixed;left:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:2147483647;background:#161513;color:#f3efe6;border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:7px 12px;font:600 12px/1 -apple-system,Segoe UI,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.4);cursor:pointer;opacity:.88">‹ XF</button>';
   const out = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, backBtn + "</body>") : (html + backBtn);
@@ -1219,7 +1270,9 @@ function savePins() {
 function renderPins() {
   const el = document.getElementById("pinnedGrid");
   if (!el) return;
-  el.innerHTML = pins.map(p => {
+  // On phones, only show actionable URL pins on the home grid (Windows path pins remain in Edit / Add)
+  const visible = ENV.isMobile ? pins.filter(p => p.kind === "url") : pins;
+  el.innerHTML = visible.map(p => {
     const badge = (p.label || "?").slice(0, 2).toUpperCase();
     if (p.kind === "url") {
       return `<a class="pin-tile" href="${esc(p.target)}" target="_blank" rel="noopener"><span class="mono-badge">${esc(badge)}</span><span class="lbl">${esc(p.label)}</span></a>`;
@@ -1260,12 +1313,26 @@ function saveBrowserSnapshot(snap) {
   activeId = snap.id;
   renderMain();
 }
+function renderEmptyScoutActions() {
+  const el = document.getElementById("envEmptyActions");
+  if (!el) return;
+  if (ENV.isIOS) {
+    el.innerHTML = `<button class="btn pri sm" onclick="pickFolder()">Scan Files</button><button class="btn sm" onclick="pickJson()">Import</button>`;
+  } else if (ENV.isAndroid) {
+    el.innerHTML = `<button class="btn pri sm" onclick="pickFolder()">Scan Folder</button><button class="btn sm" onclick="pickJson()">Import</button>`;
+  } else if (ENV.isWin) {
+    el.innerHTML = `<button class="btn pri sm" onclick="downloadScoutCmd()">Scan This PC</button><button class="btn sm" onclick="pickFolder()">Scan Folder</button><button class="btn sm" onclick="pickJson()">Import</button>`;
+  } else {
+    el.innerHTML = `<button class="btn pri sm" onclick="downloadScoutSh()">Scan ${ENV.isMac ? "Mac" : "Device"}</button><button class="btn sm" onclick="pickFolder()">Scan Folder</button><button class="btn sm" onclick="pickJson()">Import</button>`;
+  }
+}
+
 function renderMain() {
   const s = activeSnap();
   document.getElementById("activeDeviceTitle").textContent = s ? s.deviceName : "Scan Device";
   document.getElementById("envEmpty").classList.toggle("hidden", !!s);
   document.getElementById("envLoaded").classList.toggle("hidden", !s);
-  if (!s) return;
+  if (!s) { renderEmptyScoutActions(); return; }
 
   document.getElementById("envSectionLabel").textContent = `${s.deviceName} · ${Number(s.totalFiles || 0).toLocaleString()} files`;
   document.getElementById("driveStrip").innerHTML = (s.drives || []).map(d => {
@@ -1325,9 +1392,9 @@ searchInput.addEventListener("input", () => {
   }
   tools.forEach(t => {
     if (t.name.toLowerCase().includes(q) || (t.scope || "").toLowerCase().includes(q)) {
-      if (!searchTopAction) searchTopAction = () => openToolSheet(t.id);
+      if (!searchTopAction) searchTopAction = () => smartTapTool(t.id);
       const m = toolCacheMeta[t.id];
-      rows.push(`<div class="row" onclick="openToolSheet(${JSON.stringify(t.id)})"><div class="row-left"><div class="row-title">${esc(t.name)}</div><div class="row-sub">${m ? "Verified #" + m.sha : esc(t.scope)}</div></div><div class="row-right">Tool</div></div>`);
+      rows.push(`<div class="row" onclick="smartTapTool(${JSON.stringify(t.id)})"><div class="row-left"><div class="row-title">${esc(t.name)}</div><div class="row-sub">${m ? "Verified #" + m.sha : esc(t.scope)}</div></div><div class="row-right">Open</div></div>`);
     }
   });
   if (currentMode === "my") {
@@ -1444,10 +1511,18 @@ function savePlaytestItems(arr) {
   renderTools();
 }
 
+function setPtKind(val) {
+  const inp = document.getElementById("ptKind");
+  if (inp) inp.value = val;
+  document.querySelectorAll(".kind-pill").forEach(b => b.classList.toggle("active", b.dataset.kind === val));
+}
+
 async function submitPlaytest(mode) {
   const appId = document.getElementById("ptApp")?.value || "XF-HUB";
   const kind  = document.getElementById("ptKind")?.value || "Idea";
-  const who   = (document.getElementById("ptWho")?.value || "").trim() || "Tester";
+  const whoRaw = (document.getElementById("ptWho")?.value || "").trim();
+  if (whoRaw) { try { localStorage.setItem(LS_PT_WHO, whoRaw); } catch {} }
+  const who   = whoRaw || "Tester";
   const note  = (document.getElementById("ptNote")?.value || "").trim();
   if (!note) return showToast("Write a quick note first");
 
@@ -1567,9 +1642,11 @@ function openSheet(kind) {
     try { hasHook = !!(localStorage.getItem(LS_PT_HOOK) || "").trim(); } catch {}
     const isTriage = (kind === "playtest-triage" && isMy);
     titleEl.textContent = isTriage ? `Playtest Triage (${items.length})` : "Playtest";
+    let lastTool = "", savedWho = "";
+    try { lastTool = localStorage.getItem(LS_LAST_TOOL) || ""; savedWho = localStorage.getItem(LS_PT_WHO) || ""; } catch {}
     const appOpts = [
-      ...tools.map(t => `<option value="${esc(t.id)}">${esc(t.name)}${toolCacheMeta[t.id] ? " (#" + esc(toolCacheMeta[t.id].sha) + ")" : ""}</option>`),
-      `<option value="XF-HUB">XF-HUB (Build ${window.XF_RUNNING || XF_BUILD})</option>`,
+      ...tools.map(t => `<option value="${esc(t.id)}"${lastTool === t.id ? " selected" : ""}>${esc(t.name)}${toolCacheMeta[t.id] ? " (#" + esc(toolCacheMeta[t.id].sha) + ")" : ""}</option>`),
+      `<option value="XF-HUB"${lastTool === "XF-HUB" ? " selected" : ""}>XF-HUB (Build ${window.XF_RUNNING || XF_BUILD})</option>`,
       `<option value="Other">Other</option>`
     ].join("");
     const navHtml = isMy ? `
@@ -1583,14 +1660,13 @@ function openSheet(kind) {
         ${navHtml}
         <div style="display:grid;gap:8px">
           <select id="ptApp" class="field">${appOpts}</select>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <select id="ptKind" class="field">
-              <option value="Bug">Bug</option>
-              <option value="Idea">Idea</option>
-              <option value="UX">Confusing / UX</option>
-            </select>
-            <input id="ptWho" class="field" placeholder="Your name (optional)">
+          <input type="hidden" id="ptKind" value="Idea">
+          <div class="kind-pills">
+            <button type="button" class="kind-pill" data-kind="Bug" onclick="setPtKind('Bug')">Bug</button>
+            <button type="button" class="kind-pill active" data-kind="Idea" onclick="setPtKind('Idea')">Idea</button>
+            <button type="button" class="kind-pill" data-kind="UX" onclick="setPtKind('UX')">UX</button>
           </div>
+          <input id="ptWho" class="field" placeholder="Your name (optional)" value="${esc(savedWho)}">
           <textarea id="ptNote" class="pad" style="min-height:130px" placeholder="What happened or what would make it better?"></textarea>
           <button class="btn pri" onclick="submitPlaytest('email')">Email Feedback</button>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -1657,18 +1733,33 @@ function openSheet(kind) {
           </div>
         `).join("")}
       </div>` : "";
-    bodyEl.innerHTML = `
-      ${listHtml}
+    const scoutBtns = ENV.isIOS ? `
       <div style="display:grid;gap:8px">
-        <button class="btn pri" onclick="pickFolder()">Scan Folder (Phone / Browser)</button>
-        <button class="btn" onclick="downloadScoutCmd()">Download Windows Scout (.cmd)</button>
-        <button class="btn" onclick="downloadScoutSh()">Download Mac / Linux Scout (.sh)</button>
+        <button class="btn pri" onclick="pickFolder()">Scan Files</button>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <button class="btn" onclick="pickJson()">Import JSON</button>
           <button class="btn" onclick="exportJson()">Export JSON</button>
         </div>
       </div>
-    `;
+    ` : (ENV.isAndroid ? `
+      <div style="display:grid;gap:8px">
+        <button class="btn pri" onclick="pickFolder()">Scan Folder</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn" onclick="pickJson()">Import JSON</button>
+          <button class="btn" onclick="exportJson()">Export JSON</button>
+        </div>
+      </div>
+    ` : `
+      <div style="display:grid;gap:8px">
+        ${ENV.isWin ? `<button class="btn pri" onclick="downloadScoutCmd()">Scan This PC (.cmd)</button>` : `<button class="btn pri" onclick="downloadScoutSh()">Scan ${ENV.isMac ? "Mac" : "Device"} (.sh)</button>`}
+        <button class="btn" onclick="pickFolder()">Scan Folder (Browser)</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <button class="btn" onclick="pickJson()">Import JSON</button>
+          <button class="btn" onclick="exportJson()">Export JSON</button>
+        </div>
+      </div>
+    `);
+    bodyEl.innerHTML = `${listHtml}${scoutBtns}`;
   } else if (kind === "hub") {
     titleEl.textContent = "XF-HUB";
     let hubFeed = "", ghPat = "", ptEmail = DEFAULT_PT_EMAIL, ptHook = "";
@@ -1679,12 +1770,13 @@ function openSheet(kind) {
       ptHook = localStorage.getItem(LS_PT_HOOK) || "";
     } catch {}
     const activeFeedLabel = hubFeed === "off" ? "Disabled" : (hubFeed || "blsxf/xf-hub (Live)");
-    bodyEl.innerHTML = isMy ? `
-      <div class="list-box">
-        <div class="kv-row"><span class="kv-k">Build</span><span class="kv-v num">${fmtStamp(window.XF_RUNNING || XF_BUILD)} · ${window.XF_RUNNING || XF_BUILD}</span></div>
-        <div class="kv-row"><span class="kv-k">Auto-Update</span><span class="kv-v">${esc(activeFeedLabel)}</span></div>
-        <div class="kv-row"><span class="kv-k">Embedded Scripts</span><span class="kv-v num">13</span></div>
+    const primaryHubBtns = ENV.isIOS ? `
+      <div style="display:grid;gap:8px">
+        <button class="btn pri" onclick="syncAllTools(true)">Sync Everything Now</button>
+        <button class="btn" onclick="downloadOfflineHtml()">Save Offline Single-File (.html)</button>
       </div>
+      ${!ENV.isStandalone ? `<div class="list-box"><div class="kv-row"><span class="kv-k">iPhone Offline App</span><span class="kv-v">Share → Add to Home Screen</span></div></div>` : ""}
+    ` : (ENV.isWin ? `
       <div style="display:grid;gap:8px">
         <button class="btn pri" onclick="downloadFullInstaller()">Download Windows Setup (.cmd)</button>
         <button class="btn" onclick="downloadOfflineHtml()">Save Offline Single-File (.html)</button>
@@ -1693,7 +1785,20 @@ function openSheet(kind) {
           <button class="btn" onclick="syncAllTools(true)">Sync Now</button>
         </div>
       </div>
-      ${(/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone) ? `<div class="list-box"><div class="kv-row"><span class="kv-k">iPhone Offline App</span><span class="kv-v">Share → Add to Home Screen</span></div></div>` : ""}
+    ` : `
+      <div style="display:grid;gap:8px">
+        ${deferredInstallPrompt ? `<button class="btn pri" onclick="triggerPwaInstall()">Install App</button>` : `<button class="btn pri" onclick="syncAllTools(true)">Sync Everything Now</button>`}
+        <button class="btn" onclick="downloadOfflineHtml()">Save Offline Single-File (.html)</button>
+        ${!ENV.isMobile ? `<button class="btn" onclick="downloadScoutSh()">Download ${ENV.isMac ? "Mac" : "Linux"} Scout (.sh)</button>` : ""}
+      </div>
+    `);
+    bodyEl.innerHTML = isMy ? `
+      <div class="list-box">
+        <div class="kv-row"><span class="kv-k">Build</span><span class="kv-v num">${fmtStamp(window.XF_RUNNING || XF_BUILD)} · ${window.XF_RUNNING || XF_BUILD}</span></div>
+        <div class="kv-row"><span class="kv-k">Auto-Update</span><span class="kv-v">${esc(activeFeedLabel)}</span></div>
+        <div class="kv-row"><span class="kv-k">Embedded Scripts</span><span class="kv-v num">13</span></div>
+      </div>
+      ${primaryHubBtns}
       <div class="sec-title">Live Sync &amp; Playtest Settings</div>
       <div style="display:grid;gap:8px">
         <input id="hubFeedIn" class="field" placeholder="Feed URL (default: blsxf/xf-hub, or 'off')" value="${esc(hubFeed)}">
