@@ -6,7 +6,7 @@
 <title>XF-HUB</title>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795742088924;
+var XF_BUILD=1795748795749;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
@@ -736,6 +736,7 @@ const LS_PT_HOOK  = "xf_hub_playtest_hook_v1";
 const DEFAULT_PT_EMAIL = atob("YmxzMzU5NEBnbWFpbC5jb20=");
 
 // Default Tool Channels — each verifies version / SHA-256 and caches newest build in IndexedDB
+const PLAYTEST_HUB = "https://xf-character-builder.boomingbrioche8.chatgpt.site";
 const DEFAULT_TOOLS = [
   {
     id: "tagtool",
@@ -948,7 +949,7 @@ function renderTools() {
       sub = `${t.scope} · Private cache`;
     }
     html += `
-      <button class="tile" onclick="openToolSheet(${JSON.stringify(t.id)})">
+      <button class="tile" onclick="openToolSheet(${esc(JSON.stringify(t.id))})">
         <div class="tile-top">
           <div class="tile-ico ${esc(t.color || "ico-mono")}">${toolIconSvg(t.icon)}</div>
           <svg class="tile-chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
@@ -1313,7 +1314,7 @@ searchInput.addEventListener("input", () => {
     if (t.name.toLowerCase().includes(q) || (t.scope || "").toLowerCase().includes(q)) {
       if (!searchTopAction) searchTopAction = () => openToolSheet(t.id);
       const m = toolCacheMeta[t.id];
-      rows.push(`<div class="row" onclick="openToolSheet(${JSON.stringify(t.id)})"><div class="row-left"><div class="row-title">${esc(t.name)}</div><div class="row-sub">${m ? "Verified #" + m.sha : esc(t.scope)}</div></div><div class="row-right">Tool</div></div>`);
+      rows.push(`<div class="row" onclick="openToolSheet(${esc(JSON.stringify(t.id))})"><div class="row-left"><div class="row-title">${esc(t.name)}</div><div class="row-sub">${m ? "Verified #" + m.sha : esc(t.scope)}</div></div><div class="row-right">Tool</div></div>`);
     }
   });
   if (currentMode === "my") {
@@ -1363,12 +1364,13 @@ function openToolSheet(toolId) {
     </div>
 
     <div style="display:grid;gap:8px">
-      ${m ? `<button class="btn pri" onclick="launchCachedTool(${JSON.stringify(t.id)})">Launch Verified ${esc(t.name)}</button>` : ""}
-      ${(t.feedBase || (isMy && t.ghRepo)) ? `<button class="btn ${m ? "" : "pri"}" onclick="syncTool(${JSON.stringify(t.id)}, true).then(()=>openToolSheet(${JSON.stringify(t.id)}))">Sync Latest Now</button>` : ""}
-      <button class="btn" onclick="pickLocalToolHtml(${JSON.stringify(t.id)})">Load Local HTML File</button>
+      <a class="btn pri" href="${esc(PLAYTEST_HUB + '/?tool=' + encodeURIComponent(t.id))}" target="_blank" rel="noopener noreferrer">Open playtest hub</a>
+      ${m ? `<button class="btn pri" onclick="launchCachedTool(${esc(JSON.stringify(t.id))})">Launch Verified ${esc(t.name)}</button>` : ""}
+      ${(t.feedBase || (isMy && t.ghRepo)) ? `<button class="btn ${m ? "" : "pri"}" onclick="syncTool(${esc(JSON.stringify(t.id))}, true).then(()=>openToolSheet(${esc(JSON.stringify(t.id))}))">Sync Latest Now</button>` : ""}
+      <button class="btn" onclick="pickLocalToolHtml(${esc(JSON.stringify(t.id))})">Load Local HTML File</button>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        ${m ? `<button class="btn" onclick="saveCachedToolFile(${JSON.stringify(t.id)})">Save Copy</button>` : `<button class="btn" disabled style="opacity:.45">Save Copy</button>`}
-        ${(isMy && t.localPath) ? `<button class="btn" onclick="copyText(${JSON.stringify(t.localPath)})">Copy Path</button>` : `<button class="btn" onclick="removeTool(${JSON.stringify(t.id)})">Remove</button>`}
+        ${m ? `<button class="btn" onclick="saveCachedToolFile(${esc(JSON.stringify(t.id))})">Save Copy</button>` : `<button class="btn" disabled style="opacity:.45">Save Copy</button>`}
+        ${(isMy && t.localPath) ? `<button class="btn" onclick="copyText(${esc(JSON.stringify(t.localPath))})">Copy Path</button>` : `<button class="btn" onclick="removeTool(${esc(JSON.stringify(t.id))})">Remove</button>`}
       </div>
     </div>
 
@@ -1378,8 +1380,8 @@ function openToolSheet(toolId) {
       ${isMy ? `<input id="edRepo" class="field" placeholder="Private GitHub repo (owner/repo)" value="${esc(t.ghRepo || "")}">` : ""}
       ${isMy ? `<input id="edGhPath" class="field" placeholder="File path in repo (e.g. dist/app.html)" value="${esc(t.ghPath || "")}">` : ""}
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
-        <button class="btn" onclick="saveToolEdits(${JSON.stringify(t.id)})">Save Channel</button>
-        <button class="btn" onclick="removeTool(${JSON.stringify(t.id)})">Delete</button>
+        <button class="btn" onclick="saveToolEdits(${esc(JSON.stringify(t.id))})">Save Channel</button>
+        <button class="btn" onclick="removeTool(${esc(JSON.stringify(t.id))})">Delete</button>
       </div>
     </div>
   `;
