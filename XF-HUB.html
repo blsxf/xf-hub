@@ -6,7 +6,7 @@
 <title>XF-HUB</title>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795741891669;
+var XF_BUILD=1795742088924;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
@@ -52,9 +52,10 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
     return fetch(base+"version.json?t="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.json(); }).then(function(j){
       if(!sane(+j.v) || !(+j.v>window.XF_RUNNING)) return "current";
       return fetch(base+encodeURIComponent(j.file||"XF-HUB.html")+"?t="+Date.now(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw 0; return r.text(); }).then(function(t){
-        if(t.indexOf("var XF_BUILD="+j.v+";")<0 || !/<\/html>\s*$/.test(t)) return "invalid";
-        return kvPut("self_build",{v:+j.v,html:t}).then(function(){
-          localStorage.setItem(KEY,String(j.v));
+        var bm=t.match(/var XF_BUILD=(\d+);/), tv=bm?+bm[1]:0;
+        if(!sane(tv) || !(tv>window.XF_RUNNING) || !/<\/html>\s*$/.test(t)) return "invalid";
+        return kvPut("self_build",{v:tv,html:t}).then(function(){
+          localStorage.setItem(KEY,String(tv));
           if(manual || !window._xfInteracted){
             reloadClean();
             return "swapped";
@@ -1141,7 +1142,7 @@ function downloadFullInstaller() {
   const htmlCopy = getCleanSelfHtml();
   const htmlB64 = btoa(unescape(encodeURIComponent(htmlCopy)));
   const feedBase = ((() => { try { const c = (localStorage.getItem("xfhub.self.feed") || "").trim(); return (c && c !== "off") ? c : XF_DEFAULT_FEED; } catch { return XF_DEFAULT_FEED; } })());
-  const psLiveSync = "$feed='" + feedBase.replace(/'/g, "''") + "'; try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Encoding=[Text.UTF8Encoding]::new($false); $tk=[DateTime]::UtcNow.Ticks; $vj=$wc.DownloadString($feed+'version.json?t='+$tk) | ConvertFrom-Json; $curH=Get-Content -LiteralPath (Join-Path $dst 'XF-HUB.html') -Raw -Encoding UTF8; $curV=0; if($curH -match 'var XF_BUILD=(\\d+);'){ $curV=[int64]$Matches[1] }; if([int64]$vj.v -gt $curV){ Write-Host ('Pulling live XF-HUB build ' + $vj.v + '...') -ForegroundColor Cyan; $fn=if($vj.file){$vj.file}else{'XF-HUB.html'}; $nh=$wc.DownloadString($feed+[Uri]::EscapeDataString($fn)+'?t='+$tk); if(($nh -like ('*var XF_BUILD='+$vj.v+';*')) -and ($nh.TrimEnd() -like '*</html>')){ [IO.File]::WriteAllText((Join-Path $dst 'XF-HUB.html'), $nh, [Text.UTF8Encoding]::new($false)); if($nh -match 'const EMBEDDED = (\\{[^\\r\\n]+\\});'){ $em=$Matches[1] | ConvertFrom-Json; $smap=@{'Common.ps1'='scripts\\Common.ps1';'Tidy-PC.ps1'='scripts\\Tidy-PC.ps1';'Audit-PC.ps1'='scripts\\Audit-PC.ps1';'Nightly-Audit.ps1'='scripts\\Nightly-Audit.ps1';'Scan-Device.ps1'='scripts\\Scan-Device.ps1';'Install-XFHub.ps1'='scripts\\Install-XFHub.ps1'}; foreach($pr in $em.PSObject.Properties){ $rel=if($smap.ContainsKey($pr.Name)){$smap[$pr.Name]}else{$pr.Name}; $tp=Join-Path $dst $rel; [IO.File]::WriteAllBytes($tp,[Convert]::FromBase64String($pr.Value)) } }; Write-Host 'Updated to latest live build.' -ForegroundColor Green } } } catch { Write-Host 'Offline mode: installing embedded build.' -ForegroundColor DarkGray }";
+  const psLiveSync = "$feed='" + feedBase.replace(/'/g, "''") + "'; try { [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Encoding=[Text.UTF8Encoding]::new($false); $tk=[DateTime]::UtcNow.Ticks; $vj=$wc.DownloadString($feed+'version.json?t='+$tk) | ConvertFrom-Json; $curH=Get-Content -LiteralPath (Join-Path $dst 'XF-HUB.html') -Raw -Encoding UTF8; $curV=0; if($curH -match 'var XF_BUILD=(\\d+);'){ $curV=[int64]$Matches[1] }; if([int64]$vj.v -gt $curV){ Write-Host ('Pulling live XF-HUB build ' + $vj.v + '...') -ForegroundColor Cyan; $fn=if($vj.file){$vj.file}else{'XF-HUB.html'}; $nh=$wc.DownloadString($feed+[Uri]::EscapeDataString($fn)+'?t='+$tk); $nhV=0; if($nh -match 'var XF_BUILD=(\\d+);'){ $nhV=[int64]$Matches[1] }; if(($nhV -gt $curV) -and ($nh.TrimEnd() -like '*</html>')){ [IO.File]::WriteAllText((Join-Path $dst 'XF-HUB.html'), $nh, [Text.UTF8Encoding]::new($false)); if($nh -match 'const EMBEDDED = (\\{[^\\r\\n]+\\});'){ $em=$Matches[1] | ConvertFrom-Json; $smap=@{'Common.ps1'='scripts\\Common.ps1';'Tidy-PC.ps1'='scripts\\Tidy-PC.ps1';'Audit-PC.ps1'='scripts\\Audit-PC.ps1';'Nightly-Audit.ps1'='scripts\\Nightly-Audit.ps1';'Scan-Device.ps1'='scripts\\Scan-Device.ps1';'Install-XFHub.ps1'='scripts\\Install-XFHub.ps1'}; foreach($pr in $em.PSObject.Properties){ $rel=if($smap.ContainsKey($pr.Name)){$smap[$pr.Name]}else{$pr.Name}; $tp=Join-Path $dst $rel; [IO.File]::WriteAllBytes($tp,[Convert]::FromBase64String($pr.Value)) } }; Write-Host ('Updated to latest live build ' + $nhV + '.') -ForegroundColor Green } } } catch { Write-Host 'Offline mode: installing embedded build.' -ForegroundColor DarkGray }";
   const lines = [
     '@echo off',
     'setlocal',
