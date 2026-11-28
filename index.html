@@ -46,7 +46,7 @@
 </script>
 <script>
 // ---- XF-HUB Real-Time Self-Update Loader (IndexedDB + version.json + ?local escape hatch) ----
-var XF_BUILD=1795832157613;
+var XF_BUILD=1795834800000;
 var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
 (function(){
   var KEY="xfhub.self.v", FEED_KEY="xfhub.self.feed";
@@ -86,6 +86,21 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
     var raw=0; try{ raw=+localStorage.getItem(KEY)||0; }catch(e){}
     if(raw && (raw<=XF_BUILD || !sane(raw))) forget();
   }
+  // Pre-paint startup intro check (hub fresh launch only; zero first-frame flash)
+  (function(){
+    try{
+      var q=location.search||"", h=(location.hash||"").replace(/^#/,"").toLowerCase();
+      var forceIntro=/[?&]intro=1\b/i.test(q);
+      var isEpLaunch=/[?&]suite=ep\b/i.test(q)||h==="ep";
+      var reduced=document.documentElement.getAttribute("data-motion")==="reduce" || (window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      var seen=false; try{ seen=!!sessionStorage.getItem("xf_hub_intro_seen_v1"); }catch(e){}
+      if(forceIntro || (!isEpLaunch && !reduced && !seen)){
+        document.documentElement.classList.add("xf-intro-pending");
+        window._xfIntroShouldPlay=true;
+        window._xfIntroForced=forceIntro;
+      }
+    }catch(e){}
+  })();
   window._xfInteracted=false;
   ["pointerdown","keydown"].forEach(function(ev){ window.addEventListener(ev,function(){ window._xfInteracted=true; },{once:true,passive:true}); });
   window.XF_CHECK_SELF_UPDATE=function(manual){
@@ -101,13 +116,13 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
         if(!sane(tv) || !(tv>window.XF_RUNNING) || !/<\/html>\s*$/.test(t)) return "invalid";
         return kvPut("self_build",{v:tv,html:t}).then(function(){
           localStorage.setItem(KEY,String(tv));
-          if(manual || !window._xfInteracted){
+          if(manual || (!window._xfInteracted && !window._xfIntroRunning)){
             reloadClean();
             return "swapped";
           }
           var pill=document.getElementById("updatePill");
           if(pill) pill.classList.remove("hidden");
-          if(typeof showToast==="function") showToast("Live update ready — tap Update");
+          if(typeof showToast==="function" && !window._xfIntroRunning) showToast("Live update ready — tap Update");
           return "updated";
         });
       });
@@ -142,6 +157,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
     --ok: #5fd0a0;
     --warn: #e6b45e;
     --bad: #f07a7a;
+    --welcome-scrim: rgba(11, 18, 32, 0.80);
     --radius: 16px;
     --ease: cubic-bezier(0.22, 1, 0.36, 1);
     --spring: cubic-bezier(0.34, 1.45, 0.64, 1);
@@ -176,6 +192,7 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
     --pri: #161513;
     --pri-text: #fcfaf5;
     --ok: #107e52;
+    --welcome-scrim: rgba(239, 234, 224, 0.84);
   }
 
   [data-theme="paper"][data-suite="ep"] {
@@ -835,12 +852,130 @@ var XF_DEFAULT_FEED="https://raw.githubusercontent.com/blsxf/xf-hub/main/";
     .tile-name { font-size: 16px; }
     .tile-meta { font-size: 12.5px; }
   }
+  /* ---------- ICARUS STARTUP INTRO & WELCOME ---------- */
+  .xf-intro {
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+    z-index: 200; display: none; overflow: hidden;
+    background: radial-gradient(90% 62% at 50% 6%, #f7f6f2 0%, #efeee9 54%, #e5e4de 100%);
+    opacity: 1; cursor: pointer;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    will-change: opacity;
+  }
+  .xf-intro::before {
+    content: ""; position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    pointer-events: none; opacity: 0.026;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .xf-intro-pending .xf-intro,
+  .xf-intro.active { display: block; }
+  .xf-intro.blacked { background: #04070d; }
+  .xf-intro.blacked::before { opacity: 0; }
+  .xf-intro.diving-stage {
+    background: transparent !important;
+    pointer-events: none;
+  }
+  .xf-intro.diving-stage::before { opacity: 0; }
+  .xf-intro.skipping {
+    pointer-events: none;
+    transition: opacity 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+    opacity: 0;
+  }
+  .xf-intro-sky {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    overflow: hidden; pointer-events: none; z-index: 1;
+  }
+  .xf-intro-feather {
+    position: absolute; left: 0; top: 0;
+    width: clamp(74px, 9.2vw, 104px); height: auto;
+    opacity: 0; pointer-events: none;
+    transform-origin: 50% 50%;
+    will-change: transform, opacity, filter;
+  }
+  .xf-intro-canvas {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: block; pointer-events: none; z-index: 3;
+  }
+  .xf-intro-veil {
+    position: fixed; left: 0; right: 0; top: 0; height: 195vh;
+    display: none; pointer-events: none; z-index: 2;
+    background: linear-gradient(
+      to bottom,
+      #04070d 0%,
+      #04070d 51.5%,
+      rgba(6, 12, 23, 0.78) 64%,
+      rgba(9, 16, 29, 0.30) 79%,
+      rgba(11, 18, 32, 0) 100%
+    );
+    transform: translate3d(0, 0, 0);
+    will-change: transform;
+  }
+  .xf-intro-veil.armed { display: block; }
+  .xf-intro-veil.diving {
+    transition: transform 1.40s cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translate3d(0, -100%, 0);
+  }
+  .xf-intro-skip {
+    position: absolute; right: 20px; bottom: 18px;
+    bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
+    z-index: 4; pointer-events: none;
+    font-family: var(--sans); font-size: 11px; font-weight: 500;
+    letter-spacing: 0.16em; text-transform: lowercase;
+    color: rgba(15, 20, 30, 0.34);
+    opacity: 0; transition: opacity 0.45s var(--ease);
+  }
+  .xf-intro-skip.show { opacity: 1; }
+  .xf-intro-pending,
+  .xf-intro-pending body,
+  .xf-hub-surfacing,
+  .xf-hub-surfacing body { overflow: hidden; }
+  .xf-intro-pending #appShell,
+  .xf-intro-pending #modeGate {
+    opacity: 0; transform: translateY(68px);
+  }
+  .xf-hub-surfacing #appShell,
+  .xf-hub-surfacing #modeGate {
+    transition: opacity 1.30s cubic-bezier(0.16, 1, 0.3, 1), transform 1.38s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .xf-hub-skip-reveal #appShell,
+  .xf-hub-skip-reveal #modeGate {
+    transition: opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.30s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .xf-welcome {
+    position: fixed; left: 50%; top: 18px;
+    top: max(18px, calc(env(safe-area-inset-top) + 12px));
+    transform: translate(-50%, -5px);
+    padding: 6px 26px; border-radius: 999px;
+    background: radial-gradient(closest-side, var(--welcome-scrim) 35%, transparent 100%);
+    color: var(--text); font-family: var(--sans);
+    font-size: 13px; font-weight: 450; letter-spacing: 0.16em;
+    opacity: 0; pointer-events: none; z-index: 95;
+    transition: opacity 0.56s cubic-bezier(0.22, 1, 0.36, 1), transform 0.64s cubic-bezier(0.22, 1, 0.36, 1);
+    white-space: nowrap;
+  }
+  .xf-welcome.show { opacity: 0.9; transform: translate(-50%, 0); }
+  .xf-welcome.out  { opacity: 0;   transform: translate(-50%, -4px); transition-duration: 0.62s; }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
   }
 </style>
 </head>
 <body>
+
+<!-- ==================== ICARUS STARTUP INTRO ==================== -->
+<div id="xfIntro" class="xf-intro" role="presentation" aria-hidden="true">
+  <div id="xfIntroSky" class="xf-intro-sky">
+    <svg id="xfIntroFeather" class="xf-intro-feather" viewBox="0 0 180 72" aria-hidden="true">
+      <path fill="#0b0d12" d="M 6,46.1 Q 19.5,43.0 34,40.4 C 49,24.8 71,15.8 94.5,15.4 C 97.2,15.4 99.4,15.6 101.4,15.9 L 95.6,25.4 L 104.8,16.4 C 128.5,18.2 156.5,21.5 172.5,27.5 C 162.5,36.2 144.2,43.1 124.2,46.3 L 117.6,37.8 L 120.4,46.8 C 103.5,49.5 86.2,50.5 70.2,49.4 L 65.8,42.3 L 66.8,49.0 C 52.0,47.5 41.2,45.8 34,43.1 Q 19.5,44.7 6.2,47.0 Q 5.2,46.6 6,46.1 Z"/>
+      <path fill="none" stroke="#f2f1ed" stroke-opacity="0.28" stroke-width="0.85" stroke-linecap="round" d="M 28,42.0 Q 86,34.4 156,28.7"/>
+    </svg>
+  </div>
+  <div id="xfIntroVeil" class="xf-intro-veil"></div>
+  <canvas id="xfIntroCanvas" class="xf-intro-canvas"></canvas>
+  <span id="xfIntroSkip" class="xf-intro-skip">skip</span>
+</div>
+<div id="xfWelcome" class="xf-welcome" aria-live="polite">Welcome</div>
 
 <!-- ==================== FIRST-LAUNCH SUITE & MODE PICKER ==================== -->
 <main id="modeGate" class="home hidden" aria-label="XF HUB home">
@@ -1339,7 +1474,7 @@ function renderA11ySheet() {
     return `<div class="a11y-row"><div class="a11y-lbl" id="a11y-${k}">${esc(label)}${hint ? `<span>${esc(hint)}</span>` : ""}</div>
       <div class="a11y-seg" role="group" aria-labelledby="a11y-${k}">${opts.map(([v, t]) =>
         `<button type="button" aria-pressed="${cur === v}" onclick="setA11y(${jsArg(k)},${jsArg(v)})">${esc(t)}</button>`).join("")}</div></div>`;
-  }).join("") + `<div style="display:grid;gap:8px;margin-top:10px"><button class="btn" onclick="resetA11y()">Reset to defaults</button></div>
+  }).join("") + `<div style="display:grid;gap:8px;margin-top:10px"><button class="btn" onclick="closeSheet();replayIntro()">Replay startup intro</button><button class="btn" onclick="resetA11y()">Reset to defaults</button></div>
     <div class="a11y-note">Saved on this device only.</div>`;
 }
 function setA11y(k, v) {
@@ -2989,6 +3124,7 @@ function openSheet(kind) {
         ${!isEp ? `<div class="kv-row"><span class="kv-k">Embedded Scripts</span><span class="kv-v num">14</span></div>` : ""}
       </div>
       ${primaryHubBtns}
+      ${!isEp ? `<button class="btn sm" onclick="closeSheet();replayIntro()">Replay Startup Intro</button>` : ""}
       <div class="sec-title">Live Sync &amp; Playtest Settings</div>
       <div style="display:grid;gap:8px">
         <input id="hubFeedIn" class="field" placeholder="Feed URL (default: blsxf/xf-hub, or 'off')" value="${esc(hubFeed)}">
@@ -3208,6 +3344,13 @@ function dpadMove(dir) {
 }
 
 function xfKeyHandler(e) {
+  if (window._xfIntroRunning) {
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key !== "Control" && e.key !== "Alt" && e.key !== "Meta") {
+      e.preventDefault();
+      if (typeof window._xfSkipIntro === "function") window._xfSkipIntro();
+    }
+    return;
+  }
   const tag = (document.activeElement && document.activeElement.tagName || "").toUpperCase();
   const typing = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT");
   const isBack = (e.key === "Escape" || e.key === "GoBack" || e.key === "BrowserBack" || e.keyCode === 461 || e.keyCode === 10009 || (e.key === "Backspace" && !typing));
@@ -3310,12 +3453,432 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(() => {}); });
 }
 
+// ---------- ICARUS FEATHER STARTUP INTRO ----------
+let _introRaf = 0;
+let _introTimers = [];
+function _clearIntroTimers() {
+  if (_introRaf) { cancelAnimationFrame(_introRaf); _introRaf = 0; }
+  while (_introTimers.length) clearTimeout(_introTimers.pop());
+}
+
+function showWelcomeWhisper() {
+  const el = document.getElementById("xfWelcome");
+  if (!el) return;
+  clearTimeout(window._xfWelcomeIn);
+  clearTimeout(window._xfWelcomeOut);
+  el.classList.remove("show", "out");
+  void el.offsetWidth;
+  el.classList.add("show");
+  window._xfWelcomeIn = setTimeout(() => {
+    el.classList.remove("show");
+    el.classList.add("out");
+    window._xfWelcomeOut = setTimeout(() => { el.classList.remove("out"); }, 640);
+  }, 1200);
+}
+
+function runStartupIntro(forceReplay) {
+  const introEl   = document.getElementById("xfIntro");
+  const skyEl     = document.getElementById("xfIntroSky");
+  const featherEl = document.getElementById("xfIntroFeather");
+  const canvas    = document.getElementById("xfIntroCanvas");
+  const veilEl    = document.getElementById("xfIntroVeil");
+  const skipEl    = document.getElementById("xfIntroSkip");
+  if (!introEl || !skyEl || !featherEl || !canvas || !veilEl) {
+    document.documentElement.classList.remove("xf-intro-pending");
+    return;
+  }
+
+  _clearIntroTimers();
+  try { sessionStorage.setItem("xf_hub_intro_seen_v1", "1"); } catch (_e) {}
+
+  let finished = false;
+  let blacked = false;
+  let revealing = false;
+  let W = window.innerWidth || 1280;
+  let H = window.innerHeight || 720;
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let ctx = canvas.getContext("2d");
+
+  function sizeCanvas() {
+    W = window.innerWidth || 1280;
+    H = window.innerHeight || 720;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(1, Math.round(W * dpr));
+    canvas.height = Math.max(1, Math.round(H * dpr));
+    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  sizeCanvas();
+
+  window._xfIntroRunning = true;
+  document.documentElement.classList.add("xf-intro-pending");
+  document.documentElement.classList.remove("xf-hub-surfacing", "xf-hub-skip-reveal");
+  introEl.classList.remove("diving-stage", "skipping", "blacked");
+  introEl.classList.add("active");
+  introEl.style.display = "";
+  skyEl.style.visibility = "visible";
+  canvas.style.visibility = "visible";
+  featherEl.style.opacity = "0";
+  featherEl.style.filter = "";
+  veilEl.classList.remove("armed", "diving");
+  if (skipEl) skipEl.classList.remove("show");
+
+  const surfaceRatio = 0.83;
+  const T_FALL   = 6000; // ~6.0s ultra-slow 3 sweeps gliding naturally onto the water surface (zero mid-air stall)
+  const T_RIPPLE = 6000; // fluid-drag skim on water -> soft dissolve + 3 far-reaching ripples
+  const T_ENGULF = 6950; // 950ms somber solo beat on the wide expanding ripples
+  const T_BLACK  = 8150; // 1.2s velvet-black engulfing of the dying light
+  const T_REVEAL = 8350; // 200ms silent pitch darkness -> descend downwards into navy blue waters
+  const T_DONE   = 9920; // subtle bubbles dissolve & cleanup
+
+  // Lowkey minimalist underwater micro-bubbles rising as we submerge into the navy waters
+  const bubbles = [
+    { ox: -18, oy:  6, r: 2.7, vy: 158, sway: 7, freq: 2.2, ph: 0.4, delay: 0.00, alpha: 0.27, hollow: true  },
+    { ox:  16, oy: 14, r: 1.9, vy: 134, sway: 5, freq: 2.7, ph: 1.9, delay: 0.07, alpha: 0.23, hollow: true  },
+    { ox: -44, oy: 22, r: 1.3, vy: 120, sway: 6, freq: 2.1, ph: 3.1, delay: 0.13, alpha: 0.19, hollow: false },
+    { ox:  38, oy: 10, r: 3.3, vy: 174, sway: 9, freq: 1.9, ph: 0.9, delay: 0.11, alpha: 0.24, hollow: true  },
+    { ox:  -3, oy: 26, r: 2.2, vy: 146, sway: 5, freq: 2.5, ph: 4.2, delay: 0.19, alpha: 0.25, hollow: true  },
+    { ox:  66, oy: 34, r: 1.4, vy: 128, sway: 6, freq: 2.4, ph: 2.5, delay: 0.25, alpha: 0.18, hollow: false },
+    { ox: -70, oy: 30, r: 2.4, vy: 142, sway: 8, freq: 2.0, ph: 5.0, delay: 0.23, alpha: 0.21, hollow: true  },
+    { ox:  24, oy: 40, r: 1.2, vy: 112, sway: 4, freq: 3.0, ph: 1.2, delay: 0.31, alpha: 0.18, hollow: false },
+    { ox: -28, oy: 46, r: 3.0, vy: 164, sway: 8, freq: 1.8, ph: 3.7, delay: 0.29, alpha: 0.22, hollow: true  },
+    { ox:  94, oy: 52, r: 1.8, vy: 138, sway: 6, freq: 2.2, ph: 0.2, delay: 0.37, alpha: 0.16, hollow: true  },
+    { ox: -98, oy: 42, r: 1.3, vy: 124, sway: 5, freq: 2.6, ph: 4.8, delay: 0.35, alpha: 0.16, hollow: false }
+  ];
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+  function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+
+  function detachSkipListeners() {
+    window._xfIntroRunning = false;
+    window._xfSkipIntro = null;
+    introEl.removeEventListener("pointerdown", onSkipInput);
+    introEl.removeEventListener("mousedown", onSkipInput);
+    introEl.removeEventListener("touchstart", onSkipInput);
+    introEl.removeEventListener("wheel", onSkipInput);
+  }
+
+  function cleanup(immediate) {
+    detachSkipListeners();
+    window.removeEventListener("resize", sizeCanvas);
+    const finalize = () => {
+      introEl.classList.remove("active", "diving-stage", "skipping", "blacked");
+      introEl.style.display = "none";
+      veilEl.classList.remove("armed", "diving");
+      canvas.style.visibility = "visible";
+      featherEl.style.filter = "";
+      document.documentElement.classList.remove("xf-intro-pending", "xf-hub-surfacing", "xf-hub-skip-reveal");
+      canvas.width = 0;
+      canvas.height = 0;
+    };
+    if (immediate) { finalize(); return; }
+    _introTimers.push(setTimeout(finalize, 1460));
+  }
+
+  function skipIntro() {
+    if (finished) return;
+    finished = true;
+    _clearIntroTimers();
+    if (skipEl) skipEl.classList.remove("show");
+    veilEl.classList.remove("armed", "diving");
+    document.documentElement.classList.add("xf-hub-skip-reveal");
+    void introEl.offsetWidth;
+    document.documentElement.classList.remove("xf-intro-pending");
+    introEl.classList.add("skipping");
+    detachSkipListeners();
+    window.removeEventListener("resize", sizeCanvas);
+    _introTimers.push(setTimeout(() => { showWelcomeWhisper(); }, 100));
+    _introTimers.push(setTimeout(() => {
+      introEl.classList.remove("active", "diving-stage", "skipping", "blacked");
+      introEl.style.display = "none";
+      canvas.style.visibility = "visible";
+      featherEl.style.filter = "";
+      document.documentElement.classList.remove("xf-hub-surfacing", "xf-hub-skip-reveal");
+      canvas.width = 0;
+      canvas.height = 0;
+    }, 300));
+  }
+
+  function onSkipInput(e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    skipIntro();
+  }
+
+  window._xfSkipIntro = skipIntro;
+  window.addEventListener("resize", sizeCanvas, { passive: true });
+  if ("PointerEvent" in window) {
+    introEl.addEventListener("pointerdown", onSkipInput);
+  } else {
+    introEl.addEventListener("mousedown", onSkipInput);
+    introEl.addEventListener("touchstart", onSkipInput, { passive: false });
+  }
+  introEl.addEventListener("wheel", onSkipInput, { passive: false });
+
+  if (skipEl) {
+    _introTimers.push(setTimeout(() => {
+      if (!finished && !blacked && !revealing) skipEl.classList.add("show");
+    }, 700));
+  }
+
+  const startTime = performance.now();
+  function frame(now) {
+    if (finished) return;
+    const t = now - startTime;
+    const centerX = W * 0.5;
+    const impactY = H * surfaceRatio;
+
+    // 1. Real-gravity ultra-slow descent + C1-continuous fluid-drag water skim into center
+    const rectW = featherEl.offsetWidth || Math.min(104, Math.max(74, W * 0.092));
+    const rectH = rectW * (72 / 180);
+    const END_PHASE = Math.PI * 2.92; // touches down just right of center while still gently gliding left
+    const ampX = Math.min(W * 0.34, Math.max(48, W * 0.5 - rectW * 0.85), 400);
+    const bowlAmp = Math.min(H * 0.036, 30);
+    const startY = Math.max(rectH * 1.0, H * 0.09);
+    const touchY = impactY - rectH * 0.16;
+    const endDamp = 1 - 0.62; // 0.38
+    const endBowl = (Math.cos(2 * END_PHASE) - 1) * bowlAmp * endDamp;
+
+    function sampleFlight(uVal) {
+      const w = 0.84 * uVal + 0.16 * (1 - Math.pow(1 - uVal, 2)); // steady gentle gravity — zero mid-air stall
+      const ph = w * END_PHASE;
+      const dp = 1 - 0.62 * Math.pow(uVal, 1.28);
+      const x = centerX + Math.sin(ph) * ampX * dp;
+      const y = startY + (touchY - startY - endBowl) * w + (Math.cos(2 * ph) - 1) * bowlAmp * dp;
+      const rot = (-Math.sin(ph) * 26 - Math.cos(ph) * 5) * dp;
+      const scY = 1 - Math.abs(Math.sin(ph)) * 0.07 * dp;
+      return { x, y, rot, scY };
+    }
+
+    // Exact touchdown state & instantaneous incoming velocity for C1 fluid-drag skim
+    const endPos = sampleFlight(1.0);
+    const prevPos = sampleFlight(0.998);
+    const dtSample = 0.002 * (T_FALL / 1000);
+    const vx0 = (endPos.x - prevPos.x) / dtSample;
+    const vy0 = Math.max(25, (endPos.y - prevPos.y) / dtSample);
+    const skimDistX = endPos.x - centerX; // positive (just right of center) -> glides smoothly into centerX!
+    const kx = Math.max(2.6, Math.abs(vx0) / Math.max(12, Math.abs(skimDistX)));
+    const ky = Math.max(4.5, vy0 / 11); // ~11px gentle sink into water surface tension
+    const impactX = centerX;
+
+    let curFx = endPos.x;
+    let fallU = 1;
+    if (t <= T_FALL) {
+      const u = clamp01(t / T_FALL);
+      fallU = u;
+      const fadeIn = clamp01(t / 680);
+      const p = sampleFlight(u);
+      curFx = p.x;
+      featherEl.style.opacity = String(fadeIn * fadeIn * (3 - 2 * fadeIn));
+      featherEl.style.filter = "";
+      featherEl.style.transform = `translate3d(${(p.x - rectW * 0.5).toFixed(2)}px, ${(p.y - rectH * 0.5).toFixed(2)}px, 0) rotate(${p.rot.toFixed(2)}deg) scaleY(${p.scY.toFixed(3)})`;
+    } else if (!blacked) {
+      // Water catches the feather in motion: exponential fluid drag skims it smoothly into dead-center & dissolves softly
+      const dt = (t - T_FALL) / 1000;
+      const sub = clamp01((t - T_FALL) / 920);
+      const fx = endPos.x + (vx0 / kx) * (1 - Math.exp(-kx * dt));
+      const fy = endPos.y + (vy0 / ky) * (1 - Math.exp(-ky * dt));
+      const rot = endPos.rot * Math.exp(-4.6 * dt);
+      const scX = 1 - easeOutCubic(sub) * 0.08;
+      const scY = endPos.scY + (scX - endPos.scY) * easeOutCubic(sub);
+      const blurPx = Math.pow(sub, 1.5) * 1.9;
+      curFx = fx;
+      featherEl.style.opacity = String(Math.max(0, 1 - Math.pow(sub, 1.35)));
+      featherEl.style.filter = blurPx > 0.06 ? `blur(${blurPx.toFixed(2)}px)` : "";
+      featherEl.style.transform = `translate3d(${(fx - rectW * 0.5).toFixed(2)}px, ${(fy - rectH * 0.5).toFixed(2)}px, 0) rotate(${rot.toFixed(2)}deg) scale(${scX.toFixed(3)}, ${scY.toFixed(3)})`;
+    }
+
+    // 2. Trigger downward plunge into Midnight Navy before drawing canvas so frame 0 of dive is clean
+    if (t >= T_REVEAL && !revealing) {
+      revealing = true;
+      detachSkipListeners();
+      veilEl.classList.add("armed");
+      introEl.classList.add("diving-stage");
+      document.documentElement.classList.add("xf-hub-surfacing");
+      void veilEl.offsetWidth;
+      document.documentElement.classList.remove("xf-intro-pending");
+      veilEl.classList.add("diving");
+      _introTimers.push(setTimeout(() => { showWelcomeWhisper(); }, 460));
+    }
+
+    // 3. Canvas: somber dying light, approaching waterline shadow, ripples, black engulf & underwater micro-bubbles
+    if (ctx) {
+      ctx.clearRect(0, 0, W, H);
+
+      const ep = t >= T_ENGULF ? clamp01((t - T_ENGULF) / (T_BLACK - T_ENGULF)) : 0;
+
+      if (!revealing) {
+        // Gradual, somber draining of the light as he falls ("the dying light")
+        if (ep < 1) {
+          const dimP = Math.pow(fallU, 1.45);
+          const dimAlpha = 0.14 * dimP;
+          if (dimAlpha > 0.002) {
+            ctx.fillStyle = `rgba(16, 22, 34, ${dimAlpha.toFixed(4)})`;
+            ctx.fillRect(0, 0, W, H);
+            const vig = ctx.createRadialGradient(W * 0.5, H * 0.34, Math.min(W, H) * 0.16, W * 0.5, H * 0.46, Math.hypot(W, H) * 0.62);
+            vig.addColorStop(0, "rgba(10, 15, 24, 0)");
+            vig.addColorStop(1, `rgba(10, 15, 24, ${(0.115 * dimP).toFixed(4)})`);
+            ctx.fillStyle = vig;
+            ctx.fillRect(0, 0, W, H);
+          }
+
+          // Faint shadow/reflection rising on the unseen waterline during the final glide
+          const shadowFade = t <= T_FALL ? clamp01((fallU - 0.66) / 0.34) : (1 - clamp01((t - T_FALL) / 420));
+          if (shadowFade > 0.004) {
+            const prox = t <= T_FALL ? shadowFade : 1;
+            const sRx = rectW * (0.68 - 0.22 * prox);
+            const sRy = Math.max(2, sRx * 0.14);
+            const sA = 0.18 * shadowFade * shadowFade;
+            ctx.save();
+            ctx.translate(curFx, impactY + 2);
+            ctx.scale(1, sRy / sRx);
+            const sg = ctx.createRadialGradient(0, 0, 0, 0, 0, sRx);
+            sg.addColorStop(0, `rgba(9, 13, 21, ${sA.toFixed(3)})`);
+            sg.addColorStop(1, "rgba(9, 13, 21, 0)");
+            ctx.fillStyle = sg;
+            ctx.beginPath();
+            ctx.arc(0, 0, sRx, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+
+        if (t >= T_RIPPLE) {
+          if (skipEl && skipEl.classList.contains("show")) skipEl.classList.remove("show");
+
+          const maxR = Math.hypot(Math.max(impactX, W - impactX), Math.max(impactY, H - impactY)) * 1.56;
+          const bloomR = ep > 0 ? easeInOutCubic(ep) * maxR : 0;
+          const bloomAspectY = 0.29 + 0.71 * Math.pow(ep, 1.25);
+
+          // 3 far-reaching concentric ripples — subtly trailing the gentle water skim into center
+          const r1x = centerX + skimDistX * 0.55;
+          const r2x = centerX + skimDistX * 0.20;
+          const r3x = centerX;
+          const rp1 = clamp01((t - T_RIPPLE) / 2500);
+          const rp2 = clamp01((t - (T_RIPPLE + 220)) / 2150);
+          const rp3 = clamp01((t - (T_RIPPLE + 450)) / 1800);
+          const maxRx1 = Math.min(W * 0.68, 620);
+          const maxRx2 = Math.min(W * 0.48, 440);
+          const maxRx3 = Math.min(W * 0.30, 275);
+
+          const drawRipple = (p, cx, rxMax, baseAlpha, lwStart, lwEnd, colorRgb, yOffset) => {
+            if (p <= 0 || p >= 1) return;
+            const e = easeOutCubic(p);
+            const rx = 8 + e * rxMax;
+            const ry = rx * 0.27;
+            const fadeInA = clamp01(p / 0.06);
+            const fadeOutA = Math.pow(1 - p, 1.35);
+            const a = baseAlpha * fadeInA * fadeOutA;
+            if (a <= 0.004) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(cx, impactY + 2 + (yOffset || 0), rx, ry, 0, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(${colorRgb}, ${a.toFixed(3)})`;
+            ctx.lineWidth = lwStart + (lwEnd - lwStart) * e;
+            ctx.stroke();
+            ctx.restore();
+          };
+
+          if (ep < 1) {
+            drawRipple(rp1, r1x, maxRx1, 0.56, 1.55, 0.45, "10, 14, 22", 0);
+            drawRipple(rp2, r2x, maxRx2, 0.36, 1.15, 0.38, "10, 14, 22", 0);
+            drawRipple(rp3, r3x, maxRx3, 0.22, 0.85, 0.32, "10, 14, 22", 0);
+          }
+
+          if (ep > 0 && ep < 1) {
+            const innerStop = Math.max(0.05, 0.76 - (1 - ep) * 0.10);
+            ctx.save();
+            ctx.translate(impactX, impactY + 2);
+            ctx.scale(1, bloomAspectY);
+            const g = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, bloomR));
+            g.addColorStop(0, "rgba(4, 7, 13, 1)");
+            g.addColorStop(innerStop, "rgba(4, 7, 13, 1)");
+            g.addColorStop(Math.min(0.96, innerStop + 0.14), "rgba(4, 7, 13, 0.72)");
+            g.addColorStop(1, "rgba(4, 7, 13, 0)");
+            ctx.fillStyle = g;
+            ctx.fillRect(-W - 40, (-H / bloomAspectY) - 40, W * 2 + 80, (H / bloomAspectY) * 2 + 80);
+            ctx.restore();
+          } else if (ep >= 1) {
+            ctx.fillStyle = "#04070d";
+            ctx.fillRect(0, 0, W, H);
+            if (!blacked) {
+              blacked = true;
+              introEl.classList.add("blacked");
+              skyEl.style.visibility = "hidden";
+              veilEl.classList.add("armed");
+            }
+          }
+
+          if (bloomR > 16) {
+            const sinkShift = -20 * Math.pow(ep, 1.4);
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(impactX, impactY + 2, bloomR * 0.85, bloomR * 0.85 * bloomAspectY, 0, 0, Math.PI * 2);
+            ctx.clip();
+            drawRipple(rp1, r1x, maxRx1, 0.28, 1.25, 0.45, "148, 186, 236", sinkShift);
+            drawRipple(rp2, r2x, maxRx2, 0.20, 0.95, 0.35, "148, 186, 236", sinkShift);
+            drawRipple(rp3, r3x, maxRx3, 0.13, 0.75, 0.30, "148, 186, 236", sinkShift);
+            ctx.restore();
+          }
+        }
+      }
+
+      // Lowkey minimalist underwater micro-bubbles rising as we submerge into the navy waters
+      const T_BUBBLES = T_ENGULF + 720;
+      if (t >= T_BUBBLES) {
+        const bElapsed = (t - T_BUBBLES) / 1000;
+        const diveProgress = t >= T_REVEAL ? clamp01((t - T_REVEAL) / (T_DONE - T_REVEAL)) : 0;
+        const globalFadeOut = 1 - Math.pow(diveProgress, 1.85);
+        const diveLift = easeOutCubic(diveProgress) * Math.min(H * 0.26, 210);
+        const spanScale = Math.min(1.25, Math.max(0.7, W / 1000));
+        for (let i = 0; i < bubbles.length; i++) {
+          const b = bubbles[i];
+          const age = bElapsed - b.delay;
+          if (age <= 0) continue;
+          const fadeInB = clamp01(age / 0.34);
+          const a = b.alpha * fadeInB * globalFadeOut;
+          if (a <= 0.005) continue;
+          const bx = impactX + b.ox * spanScale + Math.sin(age * b.freq + b.ph) * b.sway;
+          const by = impactY + b.oy - b.vy * age - diveLift * (0.7 + (i % 3) * 0.18);
+          if (by < -12) continue;
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(bx, by, b.r, 0, Math.PI * 2);
+          if (b.hollow) {
+            ctx.fillStyle = `rgba(176, 210, 248, ${(a * 0.16).toFixed(3)})`;
+            ctx.fill();
+            ctx.strokeStyle = `rgba(176, 210, 248, ${a.toFixed(3)})`;
+            ctx.lineWidth = 0.85;
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = `rgba(176, 210, 248, ${(a * 0.85).toFixed(3)})`;
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      }
+    }
+
+    if (t < T_DONE) {
+      _introRaf = requestAnimationFrame(frame);
+    } else {
+      finished = true;
+      cleanup(true);
+    }
+  }
+
+  _introRaf = requestAnimationFrame(frame);
+}
+
+function replayIntro() {
+  runStartupIntro(true);
+}
+
 const XF_API = {
   addNewTool, addPin, clearIcarusUrl, clearPad, clearSearch, closeSheet, closeStorageView, copyDevPrompt, copyEpDirectLink,
   copyText, deletePin, deletePlaytestItem, downloadAuditCmd, downloadFullInstaller, downloadOfflineHtml,
   downloadScoutCmd, downloadScoutSh, enterSuite, exportJson, filterApps, focusSearch, importPlaytestPaste,
   launchCachedTool, feedbackFor, setA11y, resetA11y, goHome, lockEp, lockAll, openTracker, requestSuite, submitUnlock, toggleMode, openIcarus, openIcarusSettings, openModeGate, openSheet, openStorageView, openToolSheet, pickFolder, pickJson,
-  pickLocalToolHtml, removeTool, renderMain, resetDefaultPins, runAudit, safeOpenUrl, safeScrollTop, saveCachedToolFile, saveIcarusSettings, savePins,
+  pickLocalToolHtml, removeTool, renderMain, replayIntro, resetDefaultPins, runAudit, safeOpenUrl, safeScrollTop, saveCachedToolFile, saveIcarusSettings, savePins,
   saveSyncSettings, saveToolEdits, selectDevice, selectMode, selectSuite, setGateMode, setPlaytestStatus,
   setPtKind, showToast, smartTapTool, submitIcarusPin, submitPlaytest, syncAllTools, syncTool, toggleTheme, triggerProtocol,
   triggerPwaInstall, useLocalIcarus
@@ -3343,6 +3906,11 @@ if ((reqSuite === "ep" || reqSuite === "xf") && suiteUnlocked(reqSuite)) {
   currentMode = (savedMode === "other") ? "other" : "my";
   setGateMode(currentMode);
   openModeGate();
+}
+if (window._xfIntroShouldPlay) {
+  runStartupIntro(!!window._xfIntroForced);
+} else {
+  document.documentElement.classList.remove("xf-intro-pending");
 }
 })();
 </script>
